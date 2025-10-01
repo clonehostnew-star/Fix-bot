@@ -183,7 +183,7 @@ const commandDescriptions = {
     "facebook": {
         description: "Downloads media from Facebook.",
         usage: ".facebook <Facebook post link>",
-        example: ".facebook https://www.facebook.com/..."
+        example: ".facebook https://www.facebook.com/.../"
     },
     "tiktok": {
         description: "Downloads media from TikTok.",
@@ -216,16 +216,17 @@ async function helpCommand(sock, chatId, message) {
     const commandDetails = {
         "ECONOMY": ["balance", "daily", "deposit", "give", "invest", "leaderboard", "loan", "pay", "rob", "slots", "withdraw", "work"],
         "ADMIN": ["add", "kick", "promote", "demote", "link", "revoke", "tagall", "announce", "mute", "unmute", "info", "icon", "subject", "desc", "ban", "delete", "del", "warnings", "warn", "antilink", "antibadword", "clear", "tag", "chatbot", "resetlink", "welcome", "goodbye"],
-        "GAMES": ["truth", "dare", "dice", "slot", "quiz", "riddle", "hangman", "rps", "coin", "guess", "vocab", "proverb", "debate", "cipher", "etymology", "poetry", "logic", "idiom", "decode"],
+        "GAMES": ["truth", "dare", "dice", "slot", "quiz", "riddle", "hangman", "rps", "coin", "guess", "vocab", "proverb", "debate", "cipher", "etymology", "poetry", "logic", "idiom", "decode", "wordhunt", "wordcount"],
         "MEDIA SUITE": ["blur", "simage", "sticker", "tgsticker", "meme", "take", "emojimix"],
         "TEXTMAKER": ["metallic", "ice", "snow", "impressive", "matrix", "light", "neon", "purple", "thunder", "leaves", "1917", "arena", "hacker", "sand", "blackpink", "glitch", "fire"],
         "OWNER": ["broadcast", "join", "leave", "block", "unblock", "ban", "unban", "eval", "restart", "shutdown", "setname", "setbio", "setpp", "clearcache", "chatbot", "mode", "autostatus", "clearsession", "antidelete", "cleartmp", "autoreact", "autotyping", "autoread"],
-        "WAMASTER": ["antilag", "contactonly", "antibug", "blockcode", "unblockcode", "optimize", "status"],
+        "WAMASTER": ["wamaster"],
+        "SYSTEM": ["system"],
         "TOOLS": ["qr", "shortlink", "translate", "calculate", "weather", "crypto", "stocks", "news", "dictionary", "wiki"],
         "AI": commandFiles.filter(c => ["chat", "image", "story", "code", "math", "summarize", "grammar", "marketing", "translate", "analysis", "remini", "sora", "removebg", "tts", "gpt", "gemini", "imagine"].includes(c)),
         "MUSIC": ["play", "lyrics", "playlist", "recommend", "artist", "top", "genre", "mood", "identify", "karaoke"],
         "DOWNLOADER": ["yt", "ig", "fb", "tiktok", "twitter", "spotify", "pinterest", "mediafire", "gdrive", "mega", "play", "song", "instagram", "facebook", "video", "ytmp4"],
-        "BIBLE": ["study", "quiz", "riddle", "scramble"]
+        "BIBLE": ["bible"]
     };
 
     const pairPage = process.env.PAIR_PAGE_URL;
@@ -254,22 +255,54 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
 *𝚃𝙷𝙴 𝙱𝙴𝙻𝙾𝚆 𝙰𝚁𝙴 𝙲𝙾𝙼𝙼𝙰𝙽𝙳𝚂 𝙾𝙵 𝚃𝙷𝙴 𝙱𝙾𝚃:*\n\n`;
 
     for (const category in commandDetails) {
-        const availableCommands = [...new Set(commandDetails[category])].filter(command => commandFiles.includes(command) || category === "TEXTMAKER");
+        const availableCommands = [...new Set(commandDetails[category])].filter(command => 
+            commandFiles.includes(command) || 
+            category === "TEXTMAKER" ||
+            (category === "WAMASTER" && command === "wamaster") ||
+            (category === "SYSTEM" && command === "system") ||
+            (category === "BIBLE" && command === "bible") ||
+            (category === "ECONOMY" && commandFiles.includes("economy"))
+        );
+        
         if (availableCommands.length > 0) {
             helpMessage += `╭─────「 ${'*' + category + '*'} 」───┈⊷\n`;
-            availableCommands.forEach(command => {
-                const description = commandDescriptions[command] ? ` - ${commandDescriptions[command].description}` : '';
-                helpMessage += `││❐➣ ${command}${description}\n`;
-            });
+            if (category === "WAMASTER") {
+                helpMessage += `││❐➣ .wamaster antilag\n`;
+                helpMessage += `││❐➣ .wamaster antibug\n`;
+                helpMessage += `││❐➣ .wamaster contactonly off|immediate|delayed\n`;
+                helpMessage += `││❐➣ .wamaster optimize\n`;
+                helpMessage += `││❐➣ .wamaster blockcode <code>\n`;
+                helpMessage += `││❐➣ .wamaster unblockcode <code>\n`;
+                helpMessage += `││❐➣ .wamaster listcodes\n`;
+                helpMessage += `││❐➣ .wamaster clearcodes\n`;
+                helpMessage += `││❐➣ .wamaster foreign on|off\n`;
+                helpMessage += `││❐➣ .wamaster whitelist\n`;
+                helpMessage += `││❐➣ .wamaster unwhitelist\n`;
+                helpMessage += `││❐➣ .wamaster status\n`;
+            } else if (category === "SYSTEM") {
+                helpMessage += `││❐➣ .system status\n`;
+                helpMessage += `││❐➣ .system drain\n`;
+                helpMessage += `││❐➣ .system restart\n`;
+            } else if (category === "BIBLE") {
+                helpMessage += `││❐➣ .bible study <ref>\n`;
+                helpMessage += `││❐➣ .bible quiz\n`;
+                helpMessage += `││❐➣ .bible riddle\n`;
+                helpMessage += `││❐➣ .bible scramble\n`;
+            } else if (category === "ECONOMY") {
+                commandDetails["ECONOMY"].forEach(command => {
+                    helpMessage += `││❐➣ ${command}\n`;
+                });
+            } else {
+                availableCommands.forEach(command => {
+                    const description = commandDescriptions[command] ? ` - ${commandDescriptions[command].description}` : '';
+                    helpMessage += `││❐➣ ${command}${description}\n`;
+                });
+            }
             helpMessage += `╰──────────────┈⊷\n\n`;
         }
     }
 
-    helpMessage += `⚠ *Note:*
- *➪ 𝚄𝚂𝙴 .help <𝙲𝙾𝙼𝙼𝙰𝙽𝙳> 𝙵𝙾𝚁 𝙼𝙾𝚁𝙴 𝙸𝙽𝙵𝙾*
- *➪ 𝙴𝚡𝚊𝚖𝚙𝚕𝚎: .help sticker*
-
-*> In support by WA BOT TREE*`;
+    helpMessage += `⚠ *Note:*\n *➪ 𝚄𝚂𝙴 .help <𝙲𝙾𝙼𝙼𝙰𝙽𝙳> 𝙵𝙾𝚁 𝙼𝙾𝚁𝙴 𝙸𝙽𝙵𝙾*\n *➪ 𝙴𝚡𝚊𝚖𝚙𝚕𝚎: .help sticker*\n\n*> In support by WA BOT TREE*`;
 
 
     try {
