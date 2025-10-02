@@ -91,8 +91,8 @@ const question = (text) => {
     if (rl) {
         return new Promise((resolve) => rl.question(text, resolve))
     } else {
-        // In non-interactive environment, use ownerNumber from settings
-        return Promise.resolve(settings.ownerNumber || phoneNumber)
+        // In non-interactive environments, always use configured ownerNumber
+        return Promise.resolve((settings.ownerNumber || phoneNumber || '').toString())
     }
 }
 
@@ -211,10 +211,14 @@ async function startXeonBotInc() {
         if (useMobile) throw new Error('Cannot use pairing code with mobile api')
 
         let phoneNumber
-        if (!!global.phoneNumber) {
-            phoneNumber = global.phoneNumber
+        if (process.stdin.isTTY) {
+            if (!!global.phoneNumber) {
+                phoneNumber = global.phoneNumber
+            } else {
+                phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
+            }
         } else {
-            phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
+            phoneNumber = (settings.ownerNumber || global.phoneNumber || '').toString()
         }
 
         // Clean the phone number - remove any non-digit characters
