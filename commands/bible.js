@@ -1,9 +1,11 @@
-const fetch = require('node-fetch');
+let fetch
+try { fetch = require('node-fetch'); } catch { fetch = null }
 
 const games = { quiz: new Map(), riddles: new Map(), scramble: new Map() };
 
 async function fetchBibleVerse(book, chapter) {
   try {
+    if (!fetch) return null;
     const res = await fetch(`https://bible-api.com/${book}%20${chapter}`);
     if (!res.ok) return null;
     const data = await res.json();

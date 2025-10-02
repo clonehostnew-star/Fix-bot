@@ -71,7 +71,14 @@ setInterval(() => {
 }, 30_000) // check every 30 seconds
 
 let phoneNumber = "2332727272171717"
-let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
+let owner
+try {
+    if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true })
+    if (!fs.existsSync('./data/owner.json')) fs.writeFileSync('./data/owner.json', JSON.stringify({ owners: [] }, null, 2))
+    owner = JSON.parse(fs.readFileSync('./data/owner.json'))
+} catch {
+    owner = { owners: [] }
+}
 
 global.botname = settings.botName;
 global.themeemoji = "•"
