@@ -126,6 +126,9 @@ const systemCommand = require('./commands/system');
 const { drainForCommand, getStatus } = require('./lib/systemState');
 const waMasterCommand = require('./commands/wamaster');
 const { handleIncomingProtection } = require('./lib/wamaster');
+const { handleBiblePassive, bibleCommand } = require('./commands/bible');
+const { startWordCount, handleWordCountMessage } = require('./commands/wordcount');
+const { startWordHunt, handleWordHuntMessage } = require('./commands/wordhunt');
 
 // Global settings
 global.packname = settings.packname;
@@ -246,6 +249,11 @@ async function handleMessages(sock, messageUpdate, printLog) {
             
             await Antilink(message, sock);
         }
+
+        // Passive handlers (accept user input for ongoing games/quizzes)
+        try { await handleBiblePassive(sock, chatId, message); } catch {}
+        try { await handleWordCountMessage(sock, chatId, message); } catch {}
+        try { await handleWordHuntMessage(sock, chatId, message); } catch {}
 
         // PM blocker: block non-owner DMs when enabled (do not ban)
         if (!isGroup && !message.key.fromMe && !senderIsSudo) {
@@ -371,6 +379,28 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 {
                     const args = userMessage.split(' ').slice(1);
                     await waMasterCommand(sock, chatId, message, args);
+                    commandExecuted = true;
+                }
+                break;
+            case userMessage.startsWith('.bible'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await bibleCommand(sock, chatId, message, args);
+                    commandExecuted = true;
+                }
+                break;
+            case userMessage.startsWith('.wordcount'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await startWordCount(sock, chatId, message, args);
+                    commandExecuted = true;
+                }
+                break;
+            case userMessage.startsWith('.wordhunt'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await startWordHunt(sock, chatId, message, args);
+                    commandExecuted = true;
                 }
                 break;
             case userMessage.startsWith('.system'):

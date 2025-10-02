@@ -215,7 +215,7 @@ async function helpCommand(sock, chatId, message) {
 
     const commandDetails = {
         "ECONOMY": ["balance", "daily", "deposit", "give", "invest", "leaderboard", "loan", "pay", "rob", "slots", "withdraw", "work"],
-        "ADMIN": ["add", "kick", "promote", "demote", "link", "revoke", "tagall", "announce", "mute", "unmute", "info", "icon", "subject", "desc", "ban", "delete", "del", "warnings", "warn", "antilink", "antibadword", "clear", "tag", "chatbot", "resetlink", "welcome", "goodbye"],
+        "GROUP ADMIN": ["add", "kick", "promote", "demote", "link", "revoke", "tagall", "announce", "mute", "unmute", "info", "icon", "subject", "desc", "ban", "delete", "del", "warnings", "warn", "antilink", "antibadword", "clear", "tag", "chatbot", "resetlink", "welcome", "goodbye"],
         "GAMES": ["truth", "dare", "dice", "slot", "quiz", "riddle", "hangman", "rps", "coin", "guess", "vocab", "proverb", "debate", "cipher", "etymology", "poetry", "logic", "idiom", "decode", "wordhunt", "wordcount"],
         "MEDIA SUITE": ["blur", "simage", "sticker", "tgsticker", "meme", "take", "emojimix"],
         "TEXTMAKER": ["metallic", "ice", "snow", "impressive", "matrix", "light", "neon", "purple", "thunder", "leaves", "1917", "arena", "hacker", "sand", "blackpink", "glitch", "fire"],
@@ -289,13 +289,18 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .bible riddle\n`;
                 helpMessage += `││❐➣ .bible scramble\n`;
             } else if (category === "ECONOMY") {
-                commandDetails["ECONOMY"].forEach(command => {
-                    helpMessage += `││❐➣ ${command}\n`;
-                });
+                helpMessage += `││❐➣ .eco balance|bal — *Show your wallet and bank.*\n`;
+                helpMessage += `││❐➣ .eco daily — *Claim daily reward.*\n`;
+                helpMessage += `││❐➣ .eco work — *Work and earn coins.*\n`;
+                helpMessage += `││❐➣ .eco dep <amt> — *Deposit to bank.*\n`;
+                helpMessage += `││❐➣ .eco with <amt> — *Withdraw from bank.*\n`;
+                helpMessage += `││❐➣ .eco rob @user — *Attempt to steal coins.*\n`;
+                helpMessage += `││❐➣ .eco leaderboard|lb — *Top 20 richest.*\n`;
             } else {
                 availableCommands.forEach(command => {
-                    const description = commandDescriptions[command] ? ` - ${commandDescriptions[command].description}` : '';
-                    helpMessage += `││❐➣ ${command}${description}\n`;
+                    const desc = commandDescriptions[command]?.description;
+                    const line = desc ? `││❐➣ .${command} — *${desc}*\n` : `││❐➣ .${command}\n`;
+                    helpMessage += line;
                 });
             }
             helpMessage += `╰──────────────┈⊷\n\n`;

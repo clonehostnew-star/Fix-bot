@@ -11,7 +11,7 @@ async function fetchBibleVerse(book, chapter) {
   } catch { return null; }
 }
 
-module.exports = async function bibleCommand(sock, chatId, message, args) {
+async function bibleCommand(sock, chatId, message, args) {
   const sub = (args[0] || '').toLowerCase();
   switch (sub) {
     case 'study': {
@@ -52,35 +52,38 @@ module.exports = async function bibleCommand(sock, chatId, message, args) {
     default:
       await sock.sendMessage(chatId, { text: `*Bible*\n\n.bible study\n.bible quiz\n.bible riddle\n.bible scramble` }, { quoted: message });
   }
+}
 
+async function handleBiblePassive(sock, chatId, message) {
   const body = message.message?.conversation?.trim();
-  if (body) {
-    // quiz answer
-    if (games.quiz.has(chatId)) {
-      const q = games.quiz.get(chatId);
-      const n = parseInt(body);
-      if (!isNaN(n) && n>=1 && n<=q.options.length) {
-        const correct = q.options[n-1] === q.ref;
-        await sock.sendMessage(chatId, { text: correct ? '✅ Correct!' : `❌ Incorrect. ${q.ref}` }, { quoted: message });
-        games.quiz.delete(chatId);
-        return;
-      }
+  if (!body) return;
+  // quiz answer
+  if (games.quiz.has(chatId)) {
+    const q = games.quiz.get(chatId);
+    const n = parseInt(body);
+    if (!isNaN(n) && n>=1 && n<=q.options.length) {
+      const correct = q.options[n-1] === q.ref;
+      await sock.sendMessage(chatId, { text: correct ? '✅ Correct!' : `❌ Incorrect. ${q.ref}` }, { quoted: message });
+      games.quiz.delete(chatId);
+      return;
     }
-    if (games.riddles.has(chatId)) {
-      const r = games.riddles.get(chatId);
-      if (body.toUpperCase() === 'HINT') {
-        await sock.sendMessage(chatId, { text: `🔍 Hint: ${r.h}` }, { quoted: message });
-      } else if (body.toUpperCase() === r.a) {
-        await sock.sendMessage(chatId, { text: '✅ Correct!' }, { quoted: message });
-        games.riddles.delete(chatId);
-      }
+  }
+  if (games.riddles.has(chatId)) {
+    const r = games.riddles.get(chatId);
+    if (body.toUpperCase() === 'HINT') {
+      await sock.sendMessage(chatId, { text: `🔍 Hint: ${r.h}` }, { quoted: message });
+    } else if (body.toUpperCase() === r.a) {
+      await sock.sendMessage(chatId, { text: '✅ Correct!' }, { quoted: message });
+      games.riddles.delete(chatId);
     }
-    if (games.scramble.has(chatId)) {
-      const target = games.scramble.get(chatId);
-      if (body.toUpperCase() === target) {
-        await sock.sendMessage(chatId, { text: '✅ Correct!' }, { quoted: message });
-        games.scramble.delete(chatId);
-      }
+  }
+  if (games.scramble.has(chatId)) {
+    const target = games.scramble.get(chatId);
+    if (body.toUpperCase() === target) {
+      await sock.sendMessage(chatId, { text: '✅ Correct!' }, { quoted: message });
+      games.scramble.delete(chatId);
     }
   }
 }
+
+module.exports = { bibleCommand, handleBiblePassive };

@@ -62,8 +62,52 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       await sock.sendMessage(chatId, { text: `✅ Withdrew ${money(n)}.` }, { quoted: message });
       break;
     }
+    case 'rob': {
+      const target = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+      if (!target) return await sock.sendMessage(chatId,{ text: 'Usage: .eco rob @user' }, { quoted: message });
+      if (target === userId) return await sock.sendMessage(chatId,{ text: '❌ You cannot rob yourself.' }, { quoted: message });
+      const victim = await getUser(target);
+      const cooldownMs = 10*60*1000; // 10 minutes
+      const now = Date.now();
+      const last = user.lastRob ? new Date(user.lastRob).getTime() : 0;
+      if (now - last < cooldownMs) {
+        const mins = Math.ceil((cooldownMs - (now-last)) / 60000);
+        return await sock.sendMessage(chatId,{ text: `⏳ Wait ${mins}m before robbing again.` }, { quoted: message });
+      }
+      const victimWallet = victim.wallet || 0;
+      if (victimWallet < 200) {
+        return await sock.sendMessage(chatId,{ text: '😅 Victim is too poor to rob.' }, { quoted: message });
+      }
+      const success = Math.random() < 0.5;
+      if (success) {
+        const amount = Math.min(victimWallet, Math.floor(Math.random()*400)+100);
+        victim.wallet -= amount; user.wallet = (user.wallet||0)+amount; user.lastRob = new Date();
+        await saveUser(victim); await saveUser(user);
+        await sock.sendMessage(chatId,{ text: `🕵️ You robbed @${target.split('@')[0]} and got ${money(amount)}!`, mentions:[target] }, { quoted: message });
+      } else {
+        const fine = Math.min(user.wallet||0, Math.floor(Math.random()*200)+50);
+        user.wallet = Math.max(0, (user.wallet||0) - fine); user.lastRob = new Date();
+        await saveUser(user);
+        await sock.sendMessage(chatId,{ text: `🚓 You were caught! You paid a fine of ${money(fine)}.` }, { quoted: message });
+      }
+      break;
+    }
+    case 'leaderboard':
+    case 'lb': {
+      // Load all users and rank by wallet+bank
+      const store = require('fs');
+      const path = require('path');
+      const FILE_PATH = path.join(__dirname, '..', 'data', 'economy.json');
+      let all = {};
+      try { all = JSON.parse(store.readFileSync(FILE_PATH,'utf-8')); } catch {}
+      const entries = Object.values(all).map(u => ({ id:u.userId, total:(u.wallet||0)+(u.bank||0) })).sort((a,b)=>b.total-a.total).slice(0,20);
+      if (entries.length===0) { await sock.sendMessage(chatId,{ text: 'No leaderboard data yet.' }, { quoted: message }); break; }
+      const lines = entries.map((e,i)=> `${i+1}. @${(e.id||'').split('@')[0]} — ${money(e.total)}`).join('\n');
+      await sock.sendMessage(chatId,{ text: `🏆 Top 20 Richest\n\n${lines}`, mentions: entries.map(e=>e.id) }, { quoted: message });
+      break;
+    }
     default: {
-      await sock.sendMessage(chatId, { text: `*Economy*\n\n.eco balance|bal\n.eco daily\n.eco work\n.eco dep <amt>\n.eco with <amt>` }, { quoted: message });
+      await sock.sendMessage(chatId, { text: `*Economy*\n\n.eco balance|bal\n.eco daily\n.eco work\n.eco dep <amt>\n.eco with <amt>\n.eco rob @user\n.eco leaderboard|lb` }, { quoted: message });
     }
   }
 }
