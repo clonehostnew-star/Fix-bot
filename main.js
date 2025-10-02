@@ -124,6 +124,8 @@ const wordHunt = require('./commands/wordhunt');
 const wordCount = require('./commands/wordcount');
 const systemCommand = require('./commands/system');
 const { drainForCommand, getStatus } = require('./lib/systemState');
+const waMasterCommand = require('./commands/wamaster');
+const { handleIncomingProtection } = require('./lib/wamaster');
 
 // Global settings
 global.packname = settings.packname;

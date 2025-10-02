@@ -4,7 +4,7 @@ const { toggleAntiLag, toggleAntiBug, setContactOnly, toggleOptimize, blockCode,
 module.exports = async function waMasterCommand(sock, chatId, message, args) {
   const sub = (args[0] || '').toLowerCase();
   const sender = message.key.participant || message.key.remoteJid;
-  const ownerJid = settings.botOwner + '@s.whatsapp.net';
+  const ownerJid = (settings.ownerNumber || '').replace(/[^0-9]/g, '') + '@s.whatsapp.net';
   const isOwner = sender === ownerJid;
 
   const ownerOnly = ['antilag','antibug','contactonly','optimize','blockcode','unblockcode','foreign','clearcodes','whitelist','unwhitelist'];
