@@ -292,9 +292,18 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .eco balance|bal — *Show your wallet and bank.*\n`;
                 helpMessage += `││❐➣ .eco daily — *Claim daily reward.*\n`;
                 helpMessage += `││❐➣ .eco work — *Work and earn coins.*\n`;
-                helpMessage += `││❐➣ .eco dep <amt> — *Deposit to bank.*\n`;
-                helpMessage += `││❐➣ .eco with <amt> — *Withdraw from bank.*\n`;
+                helpMessage += `││❐➣ .eco dep <amt|all> — *Deposit to bank.*\n`;
+                helpMessage += `││❐➣ .eco with <amt|all> — *Withdraw from bank.*\n`;
+                helpMessage += `││❐➣ .eco pay|give @user <amt> — *Transfer coins.*\n`;
                 helpMessage += `││❐➣ .eco rob @user — *Attempt to steal coins.*\n`;
+                helpMessage += `││❐➣ .eco slots <bet> — *Slot machine game.*\n`;
+                helpMessage += `││❐➣ .eco cf <heads|tails> <bet> — *Coin flip.*\n`;
+                helpMessage += `││❐➣ .eco dice <1-6> <bet> — *Dice guess game.*\n`;
+                helpMessage += `││❐➣ .eco invest <amount> — *Risk investment.*\n`;
+                helpMessage += `││❐➣ .eco loan <amount> — *Take a loan (10% interest).*\n`;
+                helpMessage += `││❐➣ .eco repay <amount> — *Repay loan.*\n`;
+                helpMessage += `││❐➣ .eco save <amount> — *Move to savings.*\n`;
+                helpMessage += `││❐➣ .eco unsave <amount> — *Withdraw savings.*\n`;
                 helpMessage += `││❐➣ .eco leaderboard|lb — *Top 20 richest.*\n`;
             } else {
                 availableCommands.forEach(command => {
