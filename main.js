@@ -117,7 +117,6 @@ const settingsCommand = require('./commands/settings');
 const soraCommand = require('./commands/sora');
 const responsoryCommand = require('./commands/responsory');
 const economyCommand = require('./commands/economy');
-const bibleCommand = require('./commands/bible');
 const hangmanGame = require('./commands/hangman_game');
 const numberGame = require('./commands/number_game');
 const wordHunt = require('./commands/wordhunt');
