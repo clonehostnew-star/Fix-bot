@@ -216,7 +216,7 @@ async function helpCommand(sock, chatId, message) {
     const commandDetails = {
         "ECONOMY": ["balance", "daily", "deposit", "give", "invest", "leaderboard", "loan", "pay", "rob", "slots", "withdraw", "work"],
         "GROUP ADMIN": ["add", "kick", "promote", "demote", "link", "revoke", "tagall", "announce", "mute", "unmute", "info", "icon", "subject", "desc", "ban", "delete", "del", "warnings", "warn", "antilink", "antibadword", "clear", "tag", "chatbot", "resetlink", "welcome", "goodbye"],
-        "GAMES": ["truth", "dare", "dice", "slot", "quiz", "riddle", "hangman", "rps", "coin", "guess", "vocab", "proverb", "debate", "cipher", "etymology", "poetry", "logic", "idiom", "decode", "wordhunt", "wordcount"],
+        "GAMES": ["dice", "quiz", "riddle", "hm", "rps", "coin", "guess", "vocab", "proverb", "debate", "cipher", "etymology", "poetry", "logic", "idiom", "decode", "wordhunt", "wordcount"],
         "MEDIA SUITE": ["blur", "simage", "sticker", "tgsticker", "meme", "take", "emojimix"],
         "TEXTMAKER": ["metallic", "ice", "snow", "impressive", "matrix", "light", "neon", "purple", "thunder", "leaves", "1917", "arena", "hacker", "sand", "blackpink", "glitch", "fire"],
         "OWNER": ["broadcast", "join", "leave", "block", "unblock", "ban", "unban", "eval", "restart", "shutdown", "setname", "setbio", "setpp", "clearcache", "chatbot", "mode", "autostatus", "clearsession", "antidelete", "cleartmp", "autoreact", "autotyping", "autoread"],
@@ -305,6 +305,85 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .eco save <amount> — *Move to savings.*\n`;
                 helpMessage += `││❐➣ .eco unsave <amount> — *Withdraw savings.*\n`;
                 helpMessage += `││❐➣ .eco leaderboard|lb — *Top 20 richest.*\n`;
+            } else if (category === "TEXTMAKER") {
+                helpMessage += `││❐➣ .metallic — *Stylized metallic text logo.*\n`;
+                helpMessage += `││❐➣ .ice — *Icy text logo.*\n`;
+                helpMessage += `││❐➣ .snow — *Snow effect text.*\n`;
+                helpMessage += `││❐➣ .impressive — *Impressive 3D title.*\n`;
+                helpMessage += `││❐➣ .matrix — *Matrix code style text.*\n`;
+                helpMessage += `││❐➣ .light — *Light glow text.*\n`;
+                helpMessage += `││❐➣ .neon — *Neon signage text.*\n`;
+                helpMessage += `││❐➣ .purple — *Purple glow text.*\n`;
+                helpMessage += `││❐➣ .thunder — *Lightning text.*\n`;
+                helpMessage += `││❐➣ .leaves — *Leafy nature style.*\n`;
+                helpMessage += `││❐➣ .1917 — *Vintage 1917 style.*\n`;
+                helpMessage += `││❐➣ .arena — *Steel arena title.*\n`;
+                helpMessage += `││❐➣ .hacker — *Hacker terminal style.*\n`;
+                helpMessage += `││❐➣ .sand — *Sand writing.*\n`;
+                helpMessage += `││❐➣ .blackpink — *Blackpink logo style.*\n`;
+                helpMessage += `││❐➣ .glitch — *RGB glitch effect.*\n`;
+                helpMessage += `││❐➣ .fire — *Fire flaming text.*\n`;
+            } else if (category === "OWNER") {
+                helpMessage += `││❐➣ .mode — *Set public/private.*\n`;
+                helpMessage += `││❐➣ .autostatus — *View/react statuses.*\n`;
+                helpMessage += `││❐➣ .antidelete — *Anti message delete.*\n`;
+                helpMessage += `││❐➣ .clearsession — *Reset WhatsApp session.*\n`;
+                helpMessage += `││❐➣ .cleartmp — *Cleanup temp files.*\n`;
+                helpMessage += `││❐➣ .autoreact — *Auto react to commands.*\n`;
+                helpMessage += `││❐➣ .autotyping — *Typing indicator.*\n`;
+                helpMessage += `││❐➣ .autoread — *Auto read messages.*\n`;
+                helpMessage += `││❐➣ .setpp — *Set profile photo.*\n`;
+            } else if (category === "WAMASTER") {
+                helpMessage += `││❐➣ .wamaster antilag — *Drop heavy load in spammy groups.*\n`;
+                helpMessage += `││❐➣ .wamaster antibug — *Delete+block malicious bug messages.*\n`;
+                helpMessage += `││❐➣ .wamaster contactonly off|immediate|delayed — *Non-contacts policy.*\n`;
+                helpMessage += `││❐➣ .wamaster optimize — *Enable scheduled cache cleanup.*\n`;
+                helpMessage += `││❐➣ .wamaster blockcode <code> — *Block country code.*\n`;
+                helpMessage += `││❐➣ .wamaster unblockcode <code> — *Unblock country code.*\n`;
+                helpMessage += `││❐➣ .wamaster listcodes — *List blocked codes.*\n`;
+                helpMessage += `││❐➣ .wamaster clearcodes — *Clear blocked codes.*\n`;
+                helpMessage += `││❐➣ .wamaster foreign on|off — *Block foreign numbers.*\n`;
+                helpMessage += `││❐➣ .wamaster whitelist — *Bypass protections in this group.*\n`;
+                helpMessage += `││❐➣ .wamaster unwhitelist — *Remove bypass.*\n`;
+                helpMessage += `││❐➣ .wamaster status — *Protection status.*\n`;
+            } else if (category === "SYSTEM") {
+                helpMessage += `││❐➣ .system status — *Show health metrics.*\n`;
+                helpMessage += `││❐➣ .system drain — *CPU/memory drain test.*\n`;
+                helpMessage += `││❐➣ .system restart — *Self-restart.*\n`;
+            } else if (category === "TOOLS") {
+                helpMessage += `││❐➣ .qr — *Generate QR code.*\n`;
+                helpMessage += `││❐➣ .shortlink — *Shorten a URL.*\n`;
+                helpMessage += `││❐➣ .translate — *Translate text.*\n`;
+                helpMessage += `││❐➣ .calculate — *Math calculator.*\n`;
+                helpMessage += `││❐➣ .weather — *Weather info.*\n`;
+                helpMessage += `││❐➣ .crypto — *Crypto prices.*\n`;
+                helpMessage += `││❐➣ .stocks — *Stock quotes.*\n`;
+                helpMessage += `││❐➣ .dictionary — *Word definitions.*\n`;
+                helpMessage += `││❐➣ .wiki — *Wikipedia summary.*\n`;
+            } else if (category === "AI") {
+                helpMessage += `││❐➣ .gpt — *AI chat.*\n`;
+                helpMessage += `││❐➣ .gemini — *AI chat (Gemini).*\n`;
+                helpMessage += `││❐➣ .remini — *Enhance images.*\n`;
+                helpMessage += `││❐➣ .sora — *Video generation.*\n`;
+                helpMessage += `││❐➣ .removebg — *Remove background.*\n`;
+                helpMessage += `││❐➣ .tts — *Text-to-speech.*\n`;
+                helpMessage += `││❐➣ .imagine — *Generate images.*\n`;
+            } else if (category === "MUSIC") {
+                helpMessage += `││❐➣ .play — *Search and play.*\n`;
+                helpMessage += `││❐➣ .song — *Download audio.*\n`;
+                helpMessage += `││❐➣ .lyrics — *Song lyrics.*\n`;
+                helpMessage += `││❐➣ .spotify — *Spotify lookup.*\n`;
+                helpMessage += `││❐➣ .video|.ytmp4 — *Download video.*\n`;
+            } else if (category === "DOWNLOADER") {
+                helpMessage += `││❐➣ .instagram — *Download IG media.*\n`;
+                helpMessage += `││❐➣ .facebook — *Download FB media.*\n`;
+                helpMessage += `││❐➣ .tiktok — *Download TikTok.*\n`;
+                helpMessage += `││❐➣ .play|.song|.video — *YouTube audio/video.*\n`;
+            } else if (category === "BIBLE") {
+                helpMessage += `││❐➣ .bible study <book:ch:verse> — *Fetch and read verses; type "continue" to go on.*\n`;
+                helpMessage += `││❐➣ .bible quiz — *Multiple-choice quiz with answers.*\n`;
+                helpMessage += `││❐➣ .bible riddle — *Bible riddles with HINT.*\n`;
+                helpMessage += `││❐➣ .bible scramble — *Unscramble Bible words.*\n`;
             } else {
                 availableCommands.forEach(command => {
                     const desc = commandDescriptions[command]?.description;

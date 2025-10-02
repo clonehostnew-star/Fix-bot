@@ -46,7 +46,7 @@ const newsCommand = require('./commands/news');
 const kickCommand = require('./commands/kick');
 const simageCommand = require('./commands/simage');
 const attpCommand = require('./commands/attp');
-const { startHangman, guessLetter } = require('./commands/hangman');
+// Removed legacy hangman without entry fee
 const { startTrivia, answerTrivia } = require('./commands/trivia');
 const { complimentCommand } = require('./commands/compliment');
 const { insultCommand } = require('./commands/insult');
