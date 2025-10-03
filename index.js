@@ -53,8 +53,7 @@ store.readFromFile()
 const settings = require('./settings')
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
 
-// Ensure non-interactive environments provide a phone number for pairing
-try { global.phoneNumber = (settings.ownerNumber ? String(settings.ownerNumber).replace(/[^0-9]/g,'') : '') } catch {}
+// Do not auto-set global.phoneNumber; prompt user for number unless provided via CLI
 
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
@@ -73,7 +72,7 @@ setInterval(() => {
     }
 }, 30_000) // check every 30 seconds
 
-let phoneNumber = "2332727272171717"
+let phoneNumber = ""
 let owner
 try {
     if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true })
@@ -213,15 +212,12 @@ async function startXeonBotInc() {
     if (pairingCode && !XeonBotInc.authState.creds.registered) {
         if (useMobile) throw new Error('Cannot use pairing code with mobile api')
 
+        // Always prompt in interactive mode; do not auto-fill from settings unless non-interactive
         let phoneNumber
         if (process.stdin.isTTY) {
-            if (!!global.phoneNumber) {
-                phoneNumber = global.phoneNumber
-            } else {
-                phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
-            }
+            phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
         } else {
-            phoneNumber = (settings.ownerNumber || global.phoneNumber || '').toString()
+            phoneNumber = (global.phoneNumber || '').toString()
         }
 
         // Clean the phone number - remove any non-digit characters
