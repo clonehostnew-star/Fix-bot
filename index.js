@@ -53,6 +53,9 @@ store.readFromFile()
 const settings = require('./settings')
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
 
+// Ensure non-interactive environments provide a phone number for pairing
+try { global.phoneNumber = (settings.ownerNumber ? String(settings.ownerNumber).replace(/[^0-9]/g,'') : '') } catch {}
+
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
     if (global.gc) {
