@@ -216,7 +216,7 @@ async function helpCommand(sock, chatId, message) {
     const commandDetails = {
         "ECONOMY": ["balance", "daily", "deposit", "give", "invest", "leaderboard", "loan", "pay", "rob", "slots", "withdraw", "work"],
         "GROUP ADMIN": ["add", "kick", "promote", "demote", "link", "revoke", "tagall", "announce", "mute", "unmute", "info", "icon", "subject", "desc", "ban", "delete", "del", "warnings", "warn", "antilink", "antibadword", "clear", "tag", "chatbot", "resetlink", "welcome", "goodbye"],
-        "GAMES": ["dice", "quiz", "riddle", "hm", "rps", "coin", "guess", "vocab", "proverb", "debate", "cipher", "etymology", "poetry", "logic", "idiom", "decode", "wordhunt", "wordcount"],
+        "GAMES": ["hm", "number", "rps", "dice", "coin", "quiz", "riddle", "wordhunt", "wordcount"],
         "MEDIA SUITE": ["blur", "simage", "sticker", "tgsticker", "meme", "take", "emojimix"],
         "TEXTMAKER": ["metallic", "ice", "snow", "impressive", "matrix", "light", "neon", "purple", "thunder", "leaves", "1917", "arena", "hacker", "sand", "blackpink", "glitch", "fire"],
         "OWNER": ["broadcast", "join", "leave", "block", "unblock", "ban", "unban", "eval", "restart", "shutdown", "setname", "setbio", "setpp", "clearcache", "chatbot", "mode", "autostatus", "clearsession", "antidelete", "cleartmp", "autoreact", "autotyping", "autoread"],
@@ -288,6 +288,16 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .bible quiz\n`;
                 helpMessage += `││❐➣ .bible riddle\n`;
                 helpMessage += `││❐➣ .bible scramble\n`;
+            } else if (category === "GAMES") {
+                helpMessage += `││❐➣ .hm guide — *Hangman guide.*\n`;
+                helpMessage += `││❐➣ .hm start|guess <a-z>|forfeit — *Play Hangman.*\n`;
+                helpMessage += `││❐➣ .number guide — *Number game guide.*\n`;
+                helpMessage += `││❐➣ .number start|guess <1-100>|forfeit — *Guess the number.*\n`;
+                helpMessage += `││❐➣ .rps rock|paper|scissors — *Rock-Paper-Scissors.*\n`;
+                helpMessage += `││❐➣ .dice 1-6 — *Dice guess game.*\n`;
+                helpMessage += `││❐➣ .coin heads|tails — *Coin flip.*\n`;
+                helpMessage += `││❐➣ .wordhunt start — *One-word sprint (30s).*\n`;
+                helpMessage += `││❐➣ .wordcount start — *Word count race (30s).*\n`;
             } else if (category === "ECONOMY") {
                 helpMessage += `││❐➣ .eco balance|bal — *Show your wallet and bank.*\n`;
                 helpMessage += `││❐➣ .eco daily — *Claim daily reward.*\n`;

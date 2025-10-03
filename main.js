@@ -127,6 +127,9 @@ const { handleIncomingProtection } = require('./lib/wamaster');
 const { handleBiblePassive, bibleCommand } = require('./commands/bible');
 const { startWordCount, handleWordCountMessage } = require('./commands/wordcount');
 const { startWordHunt, handleWordHuntMessage } = require('./commands/wordhunt');
+const rpsCommand = require('./commands/rps');
+const diceCommand = require('./commands/dice');
+const coinCommand = require('./commands/coin');
 
 // Global settings
 global.packname = settings.packname;
@@ -277,6 +280,10 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 await handleChatbotResponse(sock, chatId, message, userMessage, senderId);
                 await handleTagDetection(sock, chatId, message, senderId);
                 await handleMentionDetection(sock, chatId, message);
+                // Passive handlers for games and bible
+                try { await handleWordCountMessage(sock, chatId, message); } catch {}
+                try { await handleWordHuntMessage(sock, chatId, message); } catch {}
+                try { const { handleBiblePassive } = require('./commands/bible'); await handleBiblePassive(sock, chatId, message); } catch {}
             }
             return;
         }
@@ -588,6 +595,24 @@ async function handleMessages(sock, messageUpdate, printLog) {
             case userMessage.startsWith('.ttt') || userMessage.startsWith('.tictactoe'):
                 const tttText = userMessage.split(' ').slice(1).join(' ');
                 await tictactoeCommand(sock, chatId, senderId, tttText);
+                break;
+            case userMessage.startsWith('.rps'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await rpsCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.dice'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await diceCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.coin') || userMessage.startsWith('.cf'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await coinCommand(sock, chatId, message, args);
+                }
                 break;
             case userMessage.startsWith('.move'):
                 const position = parseInt(userMessage.split(' ')[1]);
