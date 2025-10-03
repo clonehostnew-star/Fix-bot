@@ -84,7 +84,8 @@ try {
 
 global.botname = settings.botName;
 global.themeemoji = "•"
-const pairingCode = !!phoneNumber || process.argv.includes("--pairing-code")
+// Enable pairing flow by default when running interactively, or when --pairing-code is passed
+const pairingCode = process.argv.includes("--pairing-code") || (!!process.stdin.isTTY)
 const useMobile = process.argv.includes("--mobile")
 
 // Only create readline interface if we're in an interactive environment
