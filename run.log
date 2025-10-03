@@ -14,3 +14,122 @@ Please enter this code in your WhatsApp app:
 2. Go to Settings > Linked Devices
 3. Tap "Link a Device"
 4. Enter the code shown above
+Your Pairing Code :  R2KB-G552
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Session logged out. Please re-authenticate.
+Error requesting pairing code: Error: Connection Closed
+    at sendRawMessage (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:56:19)
+    at sendNode (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:75:16)
+    at Object.requestPairingCode (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:362:15)
+    at async Timeout._onTimeout (/workspace/index.js:239:28) {
+  data: null,
+  isBoom: true,
+  isServer: false,
+  output: {
+    statusCode: 428,
+    payload: {
+      statusCode: 428,
+      error: 'Precondition Required',
+      message: 'Connection Closed'
+    },
+    headers: {}
+  }
+}
+Failed to get pairing code. Please check your phone number and try again.
+Session logged out. Please re-authenticate.
+Your Pairing Code :  MEPP-QY1N
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Session logged out. Please re-authenticate.
+Error requesting pairing code: Error: Connection Closed
+    at sendRawMessage (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:56:19)
+    at sendNode (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:75:16)
+    at Object.requestPairingCode (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:362:15)
+    at async Timeout._onTimeout (/workspace/index.js:239:28) {
+  data: null,
+  isBoom: true,
+  isServer: false,
+  output: {
+    statusCode: 428,
+    payload: {
+      statusCode: 428,
+      error: 'Precondition Required',
+      message: 'Connection Closed'
+    },
+    headers: {}
+  }
+}
+Failed to get pairing code. Please check your phone number and try again.
+Your Pairing Code :  1XJR-79LR
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Session logged out. Please re-authenticate.
+Error requesting pairing code: Error: Connection Closed
+    at sendRawMessage (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:56:19)
+    at sendNode (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:75:16)
+    at Object.requestPairingCode (file:///workspace/node_modules/@whiskeysockets/baileys/lib/Socket/socket.js:362:15)
+    at async Timeout._onTimeout (/workspace/index.js:239:28) {
+  data: null,
+  isBoom: true,
+  isServer: false,
+  output: {
+    statusCode: 428,
+    payload: {
+      statusCode: 428,
+      error: 'Precondition Required',
+      message: 'Connection Closed'
+    },
+    headers: {}
+  }
+}
+Failed to get pairing code. Please check your phone number and try again.
+Your Pairing Code :  37LB-MWYQ
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Your Pairing Code :  TF8N-C8GB
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Session logged out. Please re-authenticate.
+Your Pairing Code :  32Z6-P7DZ
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Your Pairing Code :  2CXR-G4FZ
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
+Session logged out. Please re-authenticate.
+Your Pairing Code :  4BLB-P37C
+
+Please enter this code in your WhatsApp app:
+1. Open WhatsApp
+2. Go to Settings > Linked Devices
+3. Tap "Link a Device"
+4. Enter the code shown above
