@@ -217,7 +217,7 @@ async function startXeonBotInc() {
         if (process.stdin.isTTY) {
             phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
         } else {
-            phoneNumber = (global.phoneNumber || '').toString()
+            phoneNumber = (process.env.PHONE_NUMBER || global.phoneNumber || '').toString()
         }
 
         // Clean the phone number - remove any non-digit characters
