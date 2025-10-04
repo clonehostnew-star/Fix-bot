@@ -135,6 +135,10 @@ const calculateCommand = require('./commands/calculate');
 const { reminiCommand } = require('./commands/remini');
 const soraCommand = require('./commands/sora');
 const removebgCmd = require('./commands/removebg');
+const wikiCommand = require('./commands/wiki');
+const dictionaryCommand = require('./commands/dictionary');
+const stocksCommand = require('./commands/stocks');
+const cryptoCommand = require('./commands/crypto');
 
 // Global settings
 global.packname = settings.packname;
@@ -994,6 +998,30 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 {
                     const args = userMessage.split(' ').slice(1);
                     await removebgCmd.exec(sock, message, args);
+                }
+                break;
+            case userMessage.startsWith('.wiki'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await wikiCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.dictionary') || userMessage.startsWith('.define'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await dictionaryCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.stocks'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await stocksCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.crypto'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await cryptoCommand(sock, chatId, message, args);
                 }
                 break;
             case userMessage.startsWith('.ss') || userMessage.startsWith('.ssweb') || userMessage.startsWith('.screenshot'):
