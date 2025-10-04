@@ -39,6 +39,10 @@ async function bibleCommand(sock, chatId, message, args) {
       const mode = (args[1] || '').toLowerCase();
       const numQ = parseInt(args[2] || args[1] || '0', 10);
       const sender = message.key.participant || message.key.remoteJid;
+      if (!mode) {
+        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz Modes\n\n• personal — normal quiz\n• speed <n> — multiplayer, first correct scores\n• duel <n> — exactly two players, timed turns\n\nExamples:\n.bible quiz speed 5\n.bible quiz duel 5` }, { quoted: message });
+        return;
+      }
       if (mode === 'speed') {
         const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
         games.multi.set(chatId, {
@@ -85,21 +89,35 @@ async function bibleCommand(sock, chatId, message, args) {
       break;
     }
     case 'riddle': {
-      const riddles = [
-        { q: 'Oldest man yet died before his father?', a: 'METHUSELAH', h: 'Genesis 5:27' },
-        { q: 'Walked with God and was not?', a: 'ENOCH', h: 'Genesis 5:24' },
-      ];
-      const r = riddles[Math.floor(Math.random()*riddles.length)];
+      const mode = (args[1] || '').toLowerCase();
+      const numQ = parseInt(args[2] || args[1] || '0', 10);
+      const sender = message.key.participant || message.key.remoteJid;
+      if (mode === 'speed') {
+        const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
+        games.multi.set(chatId, { mode: 'riddle-speed', stage: 'lobby', host: sender, players: new Set([sender]), scores: new Map([[sender,0]]), total, asked: 0, current: null, answered: false });
+        await sock.sendMessage(chatId, { text: `🤔 Bible Riddle — Speed Race\nQuestions: ${total}\nType JOIN to enter. Lobby closes in 30s.` }, { quoted: message });
+        setTimeout(async()=>{ const st=games.multi.get(chatId); if(!st||st.mode!=='riddle-speed'||st.stage!=='lobby')return; st.stage='running'; if(st.players.size===0){ games.multi.delete(chatId); return;} await askNextRiddleSpeed(sock, chatId); }, 30000);
+        return;
+      }
+      const r = sampleRiddle();
       games.riddles.set(chatId, r);
       await sock.sendMessage(chatId, { text: `🤔 ${r.q}\nType HINT for a hint.` }, { quoted: message });
       break;
     }
     case 'scramble': {
-      const words = [ {w:'GENESIS',h:'First book'}, {w:'EXODUS',h:'Departure from Egypt'}, {w:'GOSPEL',h:'Good news'} ];
-      const w = words[Math.floor(Math.random()*words.length)];
-      const scrambled = w.w.split('').sort(()=>Math.random()-0.5).join('');
+      const mode = (args[1] || '').toLowerCase();
+      const numQ = parseInt(args[2] || args[1] || '0', 10);
+      const sender = message.key.participant || message.key.remoteJid;
+      if (mode === 'speed') {
+        const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
+        games.multi.set(chatId, { mode: 'scramble-speed', stage: 'lobby', host: sender, players: new Set([sender]), scores: new Map([[sender,0]]), total, asked: 0, current: null, answered: false });
+        await sock.sendMessage(chatId, { text: `🔤 Bible Scramble — Speed Race\nQuestions: ${total}\nType JOIN to enter. Lobby closes in 30s.` }, { quoted: message });
+        setTimeout(async()=>{ const st=games.multi.get(chatId); if(!st||st.mode!=='scramble-speed'||st.stage!=='lobby')return; st.stage='running'; if(st.players.size===0){ games.multi.delete(chatId); return;} await askNextScrambleSpeed(sock, chatId); }, 30000);
+        return;
+      }
+      const w = sampleScramble();
       games.scramble.set(chatId, w.w);
-      await sock.sendMessage(chatId, { text: `🔤 Unscramble: ${scrambled}\nHint: ${w.h}` }, { quoted: message });
+      await sock.sendMessage(chatId, { text: `🔤 Unscramble: ${w.scrambled}\nHint: ${w.h}` }, { quoted: message });
       break;
     }
     default:
@@ -227,6 +245,19 @@ function sampleQuestion() {
   const options = [...item.choices].sort(()=>Math.random()-0.5);
   return { q: item.q, correct: item.correct, options };
 }
+function sampleRiddle() {
+  const bank = [
+    { q: 'Oldest man yet died before his father?', a: 'methuselah', h: 'Genesis 5:27' },
+    { q: 'Walked with God and was not?', a: 'enoch', h: 'Genesis 5:24' },
+  ];
+  return bank[Math.floor(Math.random()*bank.length)];
+}
+function sampleScramble() {
+  const words = [ {w:'GENESIS',h:'First book'}, {w:'EXODUS',h:'Departure from Egypt'}, {w:'GOSPEL',h:'Good news'} ];
+  const w = words[Math.floor(Math.random()*words.length)];
+  const scrambled = w.w.split('').sort(()=>Math.random()-0.5).join('');
+  return { w: w.w, h: w.h, scrambled };
+}
 function checkAnswer(current, ans) {
   if (!current) return false;
   if (!ans) return false;
@@ -252,6 +283,20 @@ async function askNextSpeed(sock, chatId) {
   await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${q.q}\n${opts}\n⏱️ First correct answer gets 10 points!` });
   // 15s timeout to move on
   setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${q.correct}`}); await askNextSpeed(sock, chatId); }, 15000);
+}
+async function askNextRiddleSpeed(sock, chatId) {
+  const st = games.multi.get(chatId); if (!st) return;
+  if (st.asked >= st.total) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
+  const r = sampleRiddle(); st.current = { q: r.q, correct: r.a, options: [] }; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
+  await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${r.q}\n⏱️ First correct answer gets 10 points!` });
+  setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${r.a}`}); await askNextRiddleSpeed(sock, chatId); }, 15000);
+}
+async function askNextScrambleSpeed(sock, chatId) {
+  const st = games.multi.get(chatId); if (!st) return;
+  if (st.asked >= st.total) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
+  const w = sampleScramble(); st.current = { q: `Unscramble this: ${w.scrambled}\nHint: ${w.h}`, correct: w.w.toLowerCase(), options: [] }; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
+  await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${st.current.q}\n⏱️ First correct answer gets 10 points!` });
+  setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${w.w}`}); await askNextScrambleSpeed(sock, chatId); }, 15000);
 }
 async function askNextDuel(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
