@@ -345,7 +345,7 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .setpp — *Set profile photo.*\n`;
             } else if (category === "WAMASTER") {
                 helpMessage += `││❐➣ .wamaster antilag — *Drop heavy load in spammy groups.*\n`;
-                helpMessage += `││❐➣ .wamaster antibug — *Delete+block malicious bug messages.*\n`;
+                helpMessage += `││❐➣ .wamaster antibug — *Delete + block malicious bug messages.*\n`;
                 helpMessage += `││❐➣ .wamaster contactonly off|immediate|delayed — *Non-contacts policy.*\n`;
                 helpMessage += `││❐➣ .wamaster optimize — *Enable scheduled cache cleanup.*\n`;
                 helpMessage += `││❐➣ .wamaster blockcode <code> — *Block country code.*\n`;
@@ -389,10 +389,13 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .tiktok — *Download TikTok.*\n`;
                 helpMessage += `││❐➣ .play|.song|.video — *YouTube audio/video.*\n`;
             } else if (category === "BIBLE") {
-                helpMessage += `││❐➣ .bible study <book:ch:verse> — *Fetch and read verses; type "continue" to go on.*\n`;
-                helpMessage += `││❐➣ .bible quiz — *Multiple-choice quiz with answers.*\n`;
-                helpMessage += `││❐➣ .bible riddle — *Bible riddles with HINT.*\n`;
-                helpMessage += `││❐➣ .bible scramble — *Unscramble Bible words.*\n`;
+                helpMessage += `││❐➣ .bible study <book:ch:verse> — *Fetch verses; type "continue" to proceed.*\n`;
+                helpMessage += `││❐➣ .bible quiz — *Modes:* personal | speed <n> | duel <n>\n`;
+                helpMessage += `││   • personal — normal quiz\n`;
+                helpMessage += `││   • speed <n> — multiplayer, first correct scores\n`;
+                helpMessage += `││   • duel <n> — two players, timed turns\n`;
+                helpMessage += `││❐➣ .bible riddle — *Add "speed <n>" for multiplayer speed race.*\n`;
+                helpMessage += `││❐➣ .bible scramble — *Add "speed <n>" for multiplayer speed race.*\n`;
             } else if (category === "MEDIA SUITE") {
                 helpMessage += `││❐➣ .simage — *Sticker to image.*\n`;
                 helpMessage += `││❐➣ .sticker — *Image/video to sticker.*\n`;
