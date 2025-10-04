@@ -266,29 +266,7 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
         
         if (availableCommands.length > 0) {
             helpMessage += `╭─────「 ${'*' + category + '*'} 」───┈⊷\n`;
-            if (category === "WAMASTER") {
-                helpMessage += `││❐➣ .wamaster antilag\n`;
-                helpMessage += `││❐➣ .wamaster antibug\n`;
-                helpMessage += `││❐➣ .wamaster contactonly off|immediate|delayed\n`;
-                helpMessage += `││❐➣ .wamaster optimize\n`;
-                helpMessage += `││❐➣ .wamaster blockcode <code>\n`;
-                helpMessage += `││❐➣ .wamaster unblockcode <code>\n`;
-                helpMessage += `││❐➣ .wamaster listcodes\n`;
-                helpMessage += `││❐➣ .wamaster clearcodes\n`;
-                helpMessage += `││❐➣ .wamaster foreign on|off\n`;
-                helpMessage += `││❐➣ .wamaster whitelist\n`;
-                helpMessage += `││❐➣ .wamaster unwhitelist\n`;
-                helpMessage += `││❐➣ .wamaster status\n`;
-            } else if (category === "SYSTEM") {
-                helpMessage += `││❐➣ .system status\n`;
-                helpMessage += `││❐➣ .system drain\n`;
-                helpMessage += `││❐➣ .system restart\n`;
-            } else if (category === "BIBLE") {
-                helpMessage += `││❐➣ .bible study <ref>\n`;
-                helpMessage += `││❐➣ .bible quiz\n`;
-                helpMessage += `││❐➣ .bible riddle\n`;
-                helpMessage += `││❐➣ .bible scramble\n`;
-            } else if (category === "GAMES") {
+            if (category === "GAMES") {
                 helpMessage += `││❐➣ .hm guide — *Hangman guide.*\n`;
                 helpMessage += `││❐➣ .hm start|guess <a-z>|forfeit — *Play Hangman.*\n`;
                 helpMessage += `││❐➣ .number guide — *Number game guide.*\n`;
