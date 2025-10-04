@@ -222,7 +222,7 @@ async function helpCommand(sock, chatId, message) {
         "OWNER": ["broadcast", "join", "leave", "block", "unblock", "ban", "unban", "eval", "restart", "shutdown", "setname", "setbio", "setpp", "clearcache", "chatbot", "mode", "autostatus", "clearsession", "antidelete", "cleartmp", "autoreact", "autotyping", "autoread"],
         "WAMASTER": ["wamaster"],
         "SYSTEM": ["system"],
-        "TOOLS": ["qr", "shortlink", "translate", "calculate", "weather", "crypto", "stocks", "news", "dictionary", "wiki"],
+        "TOOLS": ["shortlink", "translate", "calculate", "weather", "crypto", "stocks", "news", "dictionary", "wiki"],
         "AI": commandFiles.filter(c => ["chat", "image", "story", "code", "math", "summarize", "grammar", "marketing", "translate", "analysis", "remini", "sora", "removebg", "tts", "gpt", "gemini", "imagine"].includes(c)),
         "MUSIC": ["play", "lyrics", "playlist", "recommend", "artist", "top", "genre", "mood", "identify", "karaoke"],
         "DOWNLOADER": ["yt", "ig", "fb", "tiktok", "twitter", "spotify", "pinterest", "mediafire", "gdrive", "mega", "play", "song", "instagram", "facebook", "video", "ytmp4"],
@@ -361,7 +361,6 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .system drain — *CPU/memory drain test.*\n`;
                 helpMessage += `││❐➣ .system restart — *Self-restart.*\n`;
             } else if (category === "TOOLS") {
-                helpMessage += `││❐➣ .qr — *Generate QR code.*\n`;
                 helpMessage += `││❐➣ .shortlink — *Shorten a URL.*\n`;
                 helpMessage += `││❐➣ .translate — *Translate text.*\n`;
                 helpMessage += `││❐➣ .calculate — *Math calculator.*\n`;

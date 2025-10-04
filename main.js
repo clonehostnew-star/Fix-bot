@@ -130,6 +130,11 @@ const { startWordHunt, handleWordHuntMessage } = require('./commands/wordhunt');
 const rpsCommand = require('./commands/rps');
 const diceCommand = require('./commands/dice');
 const coinCommand = require('./commands/coin');
+const shortlinkCommand = require('./commands/shortlink');
+const calculateCommand = require('./commands/calculate');
+const { reminiCommand } = require('./commands/remini');
+const soraCommand = require('./commands/sora');
+const removebgCmd = require('./commands/removebg');
 
 // Global settings
 global.packname = settings.packname;
@@ -964,6 +969,33 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 const commandLength = userMessage.startsWith('.translate') ? 10 : 4;
                 await handleTranslateCommand(sock, chatId, message, userMessage.slice(commandLength));
                 return;
+            case userMessage.startsWith('.shortlink'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await shortlinkCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.calculate') || userMessage.startsWith('.calc'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await calculateCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.remini'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await reminiCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.sora'):
+                await soraCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.removebg') || userMessage.startsWith('.rmbg') || userMessage.startsWith('.nobg'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await removebgCmd.exec(sock, message, args);
+                }
+                break;
             case userMessage.startsWith('.ss') || userMessage.startsWith('.ssweb') || userMessage.startsWith('.screenshot'):
                 const ssCommandLength = userMessage.startsWith('.screenshot') ? 11 : (userMessage.startsWith('.ssweb') ? 6 : 3);
                 await handleSsCommand(sock, chatId, message, userMessage.slice(ssCommandLength).trim());
