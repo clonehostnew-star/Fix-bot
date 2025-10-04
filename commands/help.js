@@ -394,6 +394,13 @@ Join our channel: https://whatsapp.com/channel/0029Val3Ewv6xCSGCE9fZD0H
                 helpMessage += `││❐➣ .bible quiz — *Multiple-choice quiz with answers.*\n`;
                 helpMessage += `││❐➣ .bible riddle — *Bible riddles with HINT.*\n`;
                 helpMessage += `││❐➣ .bible scramble — *Unscramble Bible words.*\n`;
+            } else if (category === "MEDIA SUITE") {
+                helpMessage += `││❐➣ .simage — *Sticker to image.*\n`;
+                helpMessage += `││❐➣ .sticker — *Image/video to sticker.*\n`;
+                helpMessage += `││❐➣ .tgsticker — *Import Telegram sticker.*\n`;
+                helpMessage += `││❐➣ .meme — *Random meme.*\n`;
+                helpMessage += `││❐➣ .take — *Change sticker metadata.*\n`;
+                helpMessage += `││❐➣ .emojimix — *Mix two emojis into a sticker.*\n`;
             } else {
                 availableCommands.forEach(command => {
                     const desc = commandDescriptions[command]?.description;

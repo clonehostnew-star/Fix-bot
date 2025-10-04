@@ -42,8 +42,8 @@ async function bibleCommand(sock, chatId, message, args) {
       ];
       const item = bank[Math.floor(Math.random()*bank.length)];
       const options = [...item.choices].sort(()=>Math.random()-0.5);
-      games.quiz.set(chatId, { correct: item.correct, options });
-      await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n${item.q}\n\n${options.map((o,i)=>`${i+1}. ${o}`).join('\n')}\n\nReply 1-${options.length} or type the answer.` }, { quoted: message });
+      games.quiz.set(chatId, { correct: item.correct, options, attempts: 3 });
+      await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n${item.q}\n\n${options.map((o,i)=>`${i+1}. ${o}`).join('\n')}\n\nReply 1-${options.length} or type the answer. Attempts: 3` }, { quoted: message });
       break;
     }
     case 'riddle': {
@@ -93,16 +93,22 @@ async function handleBiblePassive(sock, chatId, message) {
     if (!isNaN(n) && n>=1 && n<=q.options.length) {
       correct = (q.options[n-1] === q.correct);
     } else {
-      // Accept text answers as well
       const normalized = body.trim().toLowerCase();
       correct = q.options.some(opt => opt.trim().toLowerCase() === normalized) && normalized === q.correct.trim().toLowerCase();
     }
     if (correct) {
       await sock.sendMessage(chatId, { text: '✅ Correct!' }, { quoted: message });
+      games.quiz.delete(chatId);
     } else if (!isNaN(n) || body.length > 0) {
-      await sock.sendMessage(chatId, { text: `❌ Incorrect. Correct answer: ${q.correct}` }, { quoted: message });
+      q.attempts = (q.attempts || 1) - 1;
+      if (q.attempts > 0) {
+        await sock.sendMessage(chatId, { text: `❌ Incorrect. Attempts left: ${q.attempts}` }, { quoted: message });
+        games.quiz.set(chatId, q);
+      } else {
+        await sock.sendMessage(chatId, { text: `❌ Incorrect. Correct answer: ${q.correct}` }, { quoted: message });
+        games.quiz.delete(chatId);
+      }
     }
-    games.quiz.delete(chatId);
     return;
   }
   if (games.riddles.has(chatId)) {
