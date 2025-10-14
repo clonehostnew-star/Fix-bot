@@ -3,6 +3,125 @@ try { fetch = require('node-fetch'); } catch { fetch = null }
 
 const games = { quiz: new Map(), riddles: new Map(), scramble: new Map(), multi: new Map() };
 
+// --- Bible Quiz (Personal) configuration ---
+const PERSONAL_DEFAULT_QUESTIONS = 5;
+const PERSONAL_ATTEMPTS_PER_QUESTION = 2;
+const PERSONAL_SECONDS_PER_QUESTION = 20; // timeout per question
+
+// A richer built-in question bank. All correct answers are normalized to lowercase.
+function getQuestionBank() {
+  const bank = [
+    { q: 'Who said: "For I know that my Redeemer lives"?', correct: 'job', choices: ['Job','David','Moses','Paul'], ref: 'Job 19:25' },
+    { q: 'Where is "In the beginning God created the heavens and the earth"?', correct: 'genesis 1:1', choices: ['Genesis 1:1','John 1:1','Exodus 1:1','Psalm 1:1'], ref: 'Genesis 1:1' },
+    { q: 'Who built the ark?', correct: 'noah', choices: ['Noah','Abraham','Elijah','Peter'], ref: 'Genesis 6–9' },
+    { q: 'Who led the Israelites out of Egypt?', correct: 'moses', choices: ['Moses','Joshua','Aaron','Joseph'], ref: 'Exodus 13–14' },
+    { q: 'Which king wrote many of the Psalms?', correct: 'david', choices: ['David','Solomon','Saul','Hezekiah'], ref: 'Psalms' },
+    { q: 'Finish the verse: "For God so loved the world..."', correct: 'john 3:16', choices: ['John 3:16','Romans 8:28','Genesis 12:1','Luke 2:11'], ref: 'John 3:16' },
+    { q: 'Who was thrown into the lions’ den?', correct: 'daniel', choices: ['Daniel','Joseph','Samuel','Elijah'], ref: 'Daniel 6' },
+    { q: 'How many days did God take to create the world?', correct: 'six', choices: ['Six','Seven','Three','Ten'], ref: 'Genesis 1' },
+    { q: 'Who betrayed Jesus for 30 pieces of silver?', correct: 'judas', choices: ['Judas','Peter','Thomas','James'], ref: 'Matthew 26:14–16' },
+    { q: 'Which prophet was swallowed by a great fish?', correct: 'jonah', choices: ['Jonah','Micah','Hosea','Amos'], ref: 'Jonah 1–2' },
+    { q: 'Who interpreted Pharaoh’s dreams in Egypt?', correct: 'joseph', choices: ['Joseph','Daniel','Moses','Nehemiah'], ref: 'Genesis 41' },
+    { q: 'Which book is known as the book of wisdom?', correct: 'proverbs', choices: ['Proverbs','Job','Ecclesiastes','Psalms'], ref: 'Proverbs' },
+    { q: 'Who defeated Goliath?', correct: 'david', choices: ['David','Saul','Jonathan','Samson'], ref: '1 Samuel 17' },
+    { q: 'What is the first commandment?', correct: 'no other gods', choices: ['No other gods','Do not steal','Honor your parents','Do not covet'], ref: 'Exodus 20:3' },
+    { q: 'Where is the fruit of the Spirit listed?', correct: 'galatians 5:22-23', choices: ['Galatians 5:22-23','Romans 12','1 Corinthians 13','Ephesians 6'], ref: 'Galatians 5:22–23' }
+  ];
+  return bank;
+}
+
+function normalizeAnswer(s) { return (s||'').trim().toLowerCase(); }
+
+function buildQuestion() {
+  const bank = getQuestionBank();
+  const item = bank[Math.floor(Math.random() * bank.length)];
+  const shuffled = [...item.choices].sort(() => Math.random() - 0.5);
+  const correctIndex = shuffled.findIndex(c => normalizeAnswer(c) === item.correct);
+  return {
+    question: item.q,
+    choices: shuffled,
+    correctIndex: correctIndex >= 0 ? correctIndex : 0,
+    correctText: item.choices.find(c => normalizeAnswer(c) === item.correct) || item.choices[0],
+    correctNormalized: item.correct,
+    reference: item.ref || null
+  };
+}
+
+function formatChoicesLettered(choices) {
+  const letters = ['A','B','C','D','E','F'];
+  return choices.map((c, i) => `${letters[i]}. ${c}`).join('\n');
+}
+
+function parseChoiceAnswer(input, numChoices) {
+  const trimmed = (input || '').trim();
+  // Numeric 1..N
+  const asNum = parseInt(trimmed, 10);
+  if (!isNaN(asNum) && asNum >= 1 && asNum <= numChoices) {
+    return asNum - 1;
+  }
+  // Letter A..F
+  const upper = trimmed.toUpperCase();
+  const code = upper.charCodeAt(0);
+  if (upper.length === 1 && code >= 65 && code < 65 + numChoices) {
+    return code - 65;
+  }
+  return null;
+}
+
+function clearPersonalTimer(session) {
+  if (session && session.timer) {
+    clearTimeout(session.timer);
+    session.timer = null;
+  }
+}
+
+async function askNextPersonal(sock, chatId) {
+  const session = games.quiz.get(chatId);
+  if (!session || session.mode !== 'personal') return;
+
+  // Finish if done
+  if (session.asked >= session.total) {
+    await finishPersonal(sock, chatId, session);
+    games.quiz.delete(chatId);
+    return;
+  }
+
+  // Prepare next question
+  const q = buildQuestion();
+  session.current = q;
+  session.asked += 1;
+  session.attemptsLeft = PERSONAL_ATTEMPTS_PER_QUESTION;
+  session.usedHint = false;
+  games.quiz.set(chatId, session);
+
+  const body = `🧠 Bible Quiz (${session.asked}/${session.total})\n\n${q.question}\n\n${formatChoicesLettered(q.choices)}\n\nReply with A-D or 1-4.\nType HINT or SKIP. (${PERSONAL_SECONDS_PER_QUESTION}s)`.trim();
+  await sock.sendMessage(chatId, { text: body });
+
+  clearPersonalTimer(session);
+  session.timer = setTimeout(async () => {
+    const s = games.quiz.get(chatId);
+    if (!s || s !== session || s.mode !== 'personal' || s.current !== q) return;
+    await sock.sendMessage(chatId, { text: `⏰ Time up! Answer: ${q.correctText}${q.reference ? ` (${q.reference})` : ''}` });
+    await askNextPersonal(sock, chatId);
+  }, PERSONAL_SECONDS_PER_QUESTION * 1000);
+}
+
+async function finishPersonal(sock, chatId, session) {
+  clearPersonalTimer(session);
+  const totalPoints = session.score || 0;
+  // Award coins if economy store is available
+  try {
+    const { getUser, saveUser } = require('../lib/economyStore');
+    const player = session.host || null; // not tracked; single-player chat—credit sender if known
+    if (player) {
+      const user = await getUser(player);
+      user.wallet = (user.wallet || 0) + totalPoints * 100;
+      await saveUser(user);
+    }
+  } catch {}
+  await sock.sendMessage(chatId, { text: `🏁 Quiz finished!\nScore: ${totalPoints} points out of ${session.total * 10}.` });
+}
+
 // Fetch a single verse or passage using a reference string like "Genesis 1:2"
 async function fetchBibleVerse(ref) {
   try {
@@ -35,14 +154,28 @@ async function bibleCommand(sock, chatId, message, args) {
       break;
     }
     case 'quiz': {
-      // Modes: personal | speed <n> | duel <n>
+      // Modes: personal [n] | speed <n> | duel <n> | stop
       const mode = (args[1] || '').toLowerCase();
       const numQ = parseInt(args[2] || args[1] || '0', 10);
       const sender = message.key.participant || message.key.remoteJid;
-      if (!mode) {
-        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz Modes\n\n• personal — normal quiz\n• speed <n> — multiplayer, first correct scores\n• duel <n> — exactly two players, timed turns\n\nExamples:\n.bible quiz speed 5\n.bible quiz duel 5` }, { quoted: message });
+
+      // Help
+      if (!mode || mode === 'help') {
+        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n• .bible quiz [personal] [n] — start solo quiz (default n=${PERSONAL_DEFAULT_QUESTIONS})\n• .bible quiz speed <n> — multiplayer, first correct scores\n• .bible quiz duel <n> — two players, alternating turns\n• During solo quiz: reply with A-D or 1-4; type HINT, SKIP, or STOP` }, { quoted: message });
         return;
       }
+
+      if (mode === 'stop') {
+        const sess = games.quiz.get(chatId);
+        if (sess && sess.mode === 'personal') {
+          games.quiz.delete(chatId);
+          await sock.sendMessage(chatId, { text: '🛑 Stopped the current quiz.' }, { quoted: message });
+        } else {
+          await sock.sendMessage(chatId, { text: 'No active personal quiz to stop.' }, { quoted: message });
+        }
+        return;
+      }
+
       if (mode === 'speed') {
         const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
         games.multi.set(chatId, {
@@ -76,16 +209,25 @@ async function bibleCommand(sock, chatId, message, args) {
         }, 30000);
         return;
       }
+
       // personal (default)
-      const bank = [
-        { q: 'Who said: "For I know that my redeemer lives"?', correct: 'Job', choices: ['Job','David','Moses','Paul'] },
-        { q: 'Where is the verse "In the beginning God created the heavens and the earth"?', correct: 'Genesis 1:1', choices: ['Genesis 1:1','John 1:1','Exodus 1:1','Psalms 1:1'] },
-        { q: 'Who built the ark?', correct: 'Noah', choices: ['Noah','Abraham','Elijah','Peter'] },
-      ];
-      const item = bank[Math.floor(Math.random()*bank.length)];
-      const options = [...item.choices].sort(()=>Math.random()-0.5);
-      games.quiz.set(chatId, { correct: item.correct, options, attempts: 3 });
-      await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n${item.q}\n\n${options.map((o,i)=>`${i+1}. ${o}`).join('\n')}\n\nReply 1-${options.length} or type the answer. Attempts: 3` }, { quoted: message });
+      const personalTotal = (!isNaN(numQ) && numQ > 0 && numQ <= 50)
+        ? numQ
+        : (!isNaN(parseInt(mode, 10)) ? parseInt(mode, 10) : PERSONAL_DEFAULT_QUESTIONS);
+
+      games.quiz.set(chatId, {
+        mode: 'personal',
+        host: sender,
+        total: personalTotal,
+        asked: 0,
+        score: 0,
+        current: null,
+        attemptsLeft: PERSONAL_ATTEMPTS_PER_QUESTION,
+        usedHint: false,
+        timer: null
+      });
+      await sock.sendMessage(chatId, { text: `🧠 Bible Quiz — Solo Mode\nQuestions: ${personalTotal}\nReply with A-D or 1-4. Type HINT, SKIP, or STOP.` }, { quoted: message });
+      await askNextPersonal(sock, chatId);
       break;
     }
     case 'riddle': {
@@ -186,31 +328,67 @@ async function handleBiblePassive(sock, chatId, message) {
     bibleState.set(chatId, s);
     return;
   }
-  // quiz answer
+  // Personal quiz flow (answers + controls)
   if (games.quiz.has(chatId)) {
-    const q = games.quiz.get(chatId);
-    const n = parseInt(body);
-    let correct = false;
-    if (!isNaN(n) && n>=1 && n<=q.options.length) {
-      correct = (q.options[n-1] === q.correct);
-    } else {
-      const normalized = body.trim().toLowerCase();
-      correct = q.options.some(opt => opt.trim().toLowerCase() === normalized) && normalized === q.correct.trim().toLowerCase();
-    }
-    if (correct) {
-      await sock.sendMessage(chatId, { text: '✅ Correct!' }, { quoted: message });
-      games.quiz.delete(chatId);
-    } else if (!isNaN(n) || body.length > 0) {
-      q.attempts = (q.attempts || 1) - 1;
-      if (q.attempts > 0) {
-        await sock.sendMessage(chatId, { text: `❌ Incorrect. Attempts left: ${q.attempts}` }, { quoted: message });
-        games.quiz.set(chatId, q);
-      } else {
-        await sock.sendMessage(chatId, { text: `❌ Incorrect. Correct answer: ${q.correct}` }, { quoted: message });
+    const session = games.quiz.get(chatId);
+    if (session && session.mode === 'personal') {
+      const lower = body.toLowerCase();
+      if (lower === 'stop') {
+        clearPersonalTimer(session);
         games.quiz.delete(chatId);
+        await sock.sendMessage(chatId, { text: '🛑 Stopped the current quiz.' }, { quoted: message });
+        return;
       }
+      if (lower === 'hint') {
+        if (session.usedHint) {
+          await sock.sendMessage(chatId, { text: 'You already used a hint for this question.' }, { quoted: message });
+          return;
+        }
+        if (!session.current) return;
+        session.usedHint = true;
+        games.quiz.set(chatId, session);
+        const firstLetter = session.current.correctText?.charAt(0) || '?';
+        await sock.sendMessage(chatId, { text: `🔍 Hint: Answer starts with "${firstLetter}"${session.current.reference ? ` (${session.current.reference})` : ''}` }, { quoted: message });
+        return;
+      }
+      if (lower === 'skip') {
+        if (!session.current) return;
+        clearPersonalTimer(session);
+        await sock.sendMessage(chatId, { text: `⏭️ Skipped. Correct answer: ${session.current.correctText}${session.current.reference ? ` (${session.current.reference})` : ''}` }, { quoted: message });
+        await askNextPersonal(sock, chatId);
+        return;
+      }
+
+      // Treat as an answer
+      if (!session.current) return;
+      const idx = parseChoiceAnswer(body, session.current.choices.length);
+      const answeredIndex = (idx !== null) ? idx : null;
+      const isCorrect = answeredIndex !== null
+        ? answeredIndex === session.current.correctIndex
+        : normalizeAnswer(body) === session.current.correctNormalized;
+
+      if (isCorrect) {
+        clearPersonalTimer(session);
+        const basePoints = session.attemptsLeft === PERSONAL_ATTEMPTS_PER_QUESTION ? 10 : 5;
+        const penalty = session.usedHint ? 3 : 0;
+        const gained = Math.max(0, basePoints - penalty);
+        session.score = (session.score || 0) + gained;
+        await sock.sendMessage(chatId, { text: `✅ Correct! (+${gained})` }, { quoted: message });
+        games.quiz.set(chatId, session);
+        await askNextPersonal(sock, chatId);
+      } else {
+        session.attemptsLeft = (session.attemptsLeft || 1) - 1;
+        games.quiz.set(chatId, session);
+        if (session.attemptsLeft > 0) {
+          await sock.sendMessage(chatId, { text: `❌ Incorrect. Attempts left: ${session.attemptsLeft}` }, { quoted: message });
+        } else {
+          clearPersonalTimer(session);
+          await sock.sendMessage(chatId, { text: `❌ Incorrect. Correct answer: ${session.current.correctText}${session.current.reference ? ` (${session.current.reference})` : ''}` }, { quoted: message });
+          await askNextPersonal(sock, chatId);
+        }
+      }
+      return;
     }
-    return;
   }
   if (games.riddles.has(chatId)) {
     const r = games.riddles.get(chatId);
