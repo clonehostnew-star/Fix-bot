@@ -3,6 +3,19 @@ try { fetch = require('node-fetch'); } catch { fetch = null }
 
 const games = { quiz: new Map(), riddles: new Map(), scramble: new Map(), multi: new Map() };
 
+// External helpers
+const isAdmin = require('../lib/isAdmin');
+const {
+  isSudo,
+  recordBibleQuizSolo,
+  getBibleQuizLeaderboard,
+  resetBibleQuizLeaderboard,
+  setBibleQuizEnabled,
+  isBibleQuizEnabled,
+  setBibleQuizConfig,
+  getBibleQuizConfig,
+} = require('../lib/index');
+
 // --- Bible Quiz (Personal) configuration ---
 const PERSONAL_DEFAULT_QUESTIONS = 5;
 const PERSONAL_ATTEMPTS_PER_QUESTION = 2;
@@ -94,7 +107,8 @@ async function askNextPersonal(sock, chatId) {
   session.usedHint = false;
   games.quiz.set(chatId, session);
 
-  const body = `🧠 Bible Quiz (${session.asked}/${session.total})\n\n${q.question}\n\n${formatChoicesLettered(q.choices)}\n\nReply with A-D or 1-4.\nType HINT or SKIP. (${PERSONAL_SECONDS_PER_QUESTION}s)`.trim();
+  const spq = session.secondsPerQuestion || PERSONAL_SECONDS_PER_QUESTION;
+  const body = `🧠 Bible Quiz (${session.asked}/${session.total})\n\n${q.question}\n\n${formatChoicesLettered(q.choices)}\n\nReply with A-D or 1-4.\nType HINT or SKIP. (${spq}s)`.trim();
   await sock.sendMessage(chatId, { text: body });
 
   clearPersonalTimer(session);
@@ -103,7 +117,7 @@ async function askNextPersonal(sock, chatId) {
     if (!s || s !== session || s.mode !== 'personal' || s.current !== q) return;
     await sock.sendMessage(chatId, { text: `⏰ Time up! Answer: ${q.correctText}${q.reference ? ` (${q.reference})` : ''}` });
     await askNextPersonal(sock, chatId);
-  }, PERSONAL_SECONDS_PER_QUESTION * 1000);
+  }, spq * 1000);
 }
 
 async function finishPersonal(sock, chatId, session) {
@@ -117,6 +131,13 @@ async function finishPersonal(sock, chatId, session) {
       const user = await getUser(player);
       user.wallet = (user.wallet || 0) + totalPoints * 100;
       await saveUser(user);
+    }
+  } catch {}
+  // Record persistent solo stats (non-blocking)
+  try {
+    const player = session.host || null;
+    if (player) {
+      await recordBibleQuizSolo(player, chatId, totalPoints, session.correctCount || 0, session.total || 0);
     }
   } catch {}
   await sock.sendMessage(chatId, { text: `🏁 Quiz finished!\nScore: ${totalPoints} points out of ${session.total * 10}.` });
@@ -154,17 +175,79 @@ async function bibleCommand(sock, chatId, message, args) {
       break;
     }
     case 'quiz': {
-      // Modes: personal [n] | speed <n> | duel <n> | stop
+      // Modes: personal [n] | speed <n> | duel <n> | stop | lb [group|global] [N] | enable/disable | config <field> <value> | resetlb [group|global]
       const mode = (args[1] || '').toLowerCase();
       const numQ = parseInt(args[2] || args[1] || '0', 10);
       const sender = message.key.participant || message.key.remoteJid;
+      const isGroup = chatId.endsWith('@g.us');
 
       // Help
       if (!mode || mode === 'help') {
-        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n• .bible quiz [personal] [n] — start solo quiz (default n=${PERSONAL_DEFAULT_QUESTIONS})\n• .bible quiz speed <n> — multiplayer, first correct scores\n• .bible quiz duel <n> — two players, alternating turns\n• During solo quiz: reply with A-D or 1-4; type HINT, SKIP, or STOP` }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n• .bible quiz [personal] [n] — start solo quiz (default n=${PERSONAL_DEFAULT_QUESTIONS})\n• .bible quiz speed <n> — multiplayer, first correct scores\n• .bible quiz duel <n> — two players, alternating turns\n• .bible quiz lb [group|global] [N] — show leaderboard\n• .bible quiz enable|disable — toggle in this group (admin)\n• .bible quiz config <questions|attempts|seconds> <n> — set group cfg (admin)\n• .bible quiz resetlb [group|global] — reset leaderboard (admin/global sudo)\n• During solo quiz: answer A-D or 1-4; HINT, SKIP, or STOP` }, { quoted: message });
         return;
       }
 
+      // Leaderboard
+      if (mode === 'lb' || mode === 'leaderboard') {
+        const scope = (args[2] || (isGroup ? 'group' : 'global')).toLowerCase();
+        const topN = parseInt(args[3] || '10', 10) || 10;
+        const list = await getBibleQuizLeaderboard(scope === 'group' ? 'group' : 'global', chatId, topN);
+        if (!list.length) { await sock.sendMessage(chatId, { text: 'No scores yet.' }, { quoted: message }); return; }
+        const rows = list.map((r, i) => `${i+1}. @${String(r.userId||'').split('@')[0]} — ${r.points||0} pts (best ${r.best||0})`);
+        await sock.sendMessage(chatId, { text: `🏆 Bible Quiz Leaderboard (${scope})\n${rows.join('\n')}`, mentions: list.map(r=>r.userId).filter(Boolean) }, { quoted: message });
+        return;
+      }
+
+      // Enable/disable in group
+      if (mode === 'enable' || mode === 'disable') {
+        if (!isGroup) { await sock.sendMessage(chatId, { text: 'This toggle is for groups only.' }, { quoted: message }); return; }
+        const admin = await isAdmin(sock, chatId, sender);
+        if (!admin.isSenderAdmin && !message.key.fromMe) { await sock.sendMessage(chatId, { text: 'Only group admins can change quiz settings.' }, { quoted: message }); return; }
+        await setBibleQuizEnabled(chatId, mode === 'enable');
+        await sock.sendMessage(chatId, { text: `Bible quiz ${mode === 'enable' ? 'enabled' : 'disabled'} for this group.` }, { quoted: message });
+        return;
+      }
+
+      // Config per group
+      if (mode === 'config') {
+        if (!isGroup) { await sock.sendMessage(chatId, { text: 'Config is for groups only.' }, { quoted: message }); return; }
+        const admin = await isAdmin(sock, chatId, sender);
+        if (!admin.isSenderAdmin && !message.key.fromMe) { await sock.sendMessage(chatId, { text: 'Only group admins can change quiz settings.' }, { quoted: message }); return; }
+        const field = (args[2] || '').toLowerCase();
+        const val = parseInt(args[3] || '', 10);
+        if (!['questions','attempts','seconds'].includes(field) || !Number.isFinite(val) || val <= 0) {
+          await sock.sendMessage(chatId, { text: 'Usage: .bible quiz config <questions|attempts|seconds> <number>' }, { quoted: message });
+          return;
+        }
+        const saved = await setBibleQuizConfig(chatId, { [field]: val });
+        await sock.sendMessage(chatId, { text: `Set ${field} = ${saved[field]} for this group.` }, { quoted: message });
+        return;
+      }
+
+      // Reset leaderboard
+      if (mode === 'resetlb') {
+        const scope = (args[2] || 'group').toLowerCase();
+        if (scope === 'global') {
+          const sudo = await isSudo(sender);
+          if (!sudo && !message.key.fromMe) { await sock.sendMessage(chatId, { text: 'Only bot owner/sudo can reset global leaderboard.' }, { quoted: message }); return; }
+          await resetBibleQuizLeaderboard('global');
+          await sock.sendMessage(chatId, { text: 'Global leaderboard reset.' }, { quoted: message });
+          return;
+        }
+        // group
+        if (!isGroup) { await sock.sendMessage(chatId, { text: 'Group leaderboard reset only works in groups.' }, { quoted: message }); return; }
+        const admin = await isAdmin(sock, chatId, sender);
+        if (!admin.isSenderAdmin && !message.key.fromMe) { await sock.sendMessage(chatId, { text: 'Only group admins can reset group leaderboard.' }, { quoted: message }); return; }
+        await resetBibleQuizLeaderboard('group', chatId);
+        await sock.sendMessage(chatId, { text: 'Group leaderboard reset.' }, { quoted: message });
+        return;
+      }
+
+      // Before starting any game mode in groups, check if enabled
+      if (isGroup) {
+        const enabled = await isBibleQuizEnabled(chatId);
+        if (!enabled) { await sock.sendMessage(chatId, { text: 'Bible quiz is disabled in this group.' }, { quoted: message }); return; }
+      }
       if (mode === 'stop') {
         const sess = games.quiz.get(chatId);
         if (sess && sess.mode === 'personal') {
@@ -211,9 +294,10 @@ async function bibleCommand(sock, chatId, message, args) {
       }
 
       // personal (default)
+      const cfg = (await getBibleQuizConfig(chatId)) || {};
       const personalTotal = (!isNaN(numQ) && numQ > 0 && numQ <= 50)
         ? numQ
-        : (!isNaN(parseInt(mode, 10)) ? parseInt(mode, 10) : PERSONAL_DEFAULT_QUESTIONS);
+        : (!isNaN(parseInt(mode, 10)) ? parseInt(mode, 10) : (cfg.questions || PERSONAL_DEFAULT_QUESTIONS));
 
       games.quiz.set(chatId, {
         mode: 'personal',
@@ -222,9 +306,12 @@ async function bibleCommand(sock, chatId, message, args) {
         asked: 0,
         score: 0,
         current: null,
-        attemptsLeft: PERSONAL_ATTEMPTS_PER_QUESTION,
+        attemptsLeft: cfg.attempts || PERSONAL_ATTEMPTS_PER_QUESTION,
+        attemptsPerQuestion: cfg.attempts || PERSONAL_ATTEMPTS_PER_QUESTION,
         usedHint: false,
-        timer: null
+        timer: null,
+        secondsPerQuestion: cfg.seconds || PERSONAL_SECONDS_PER_QUESTION,
+        correctCount: 0
       });
       await sock.sendMessage(chatId, { text: `🧠 Bible Quiz — Solo Mode\nQuestions: ${personalTotal}\nReply with A-D or 1-4. Type HINT, SKIP, or STOP.` }, { quoted: message });
       await askNextPersonal(sock, chatId);
@@ -373,6 +460,7 @@ async function handleBiblePassive(sock, chatId, message) {
         const penalty = session.usedHint ? 3 : 0;
         const gained = Math.max(0, basePoints - penalty);
         session.score = (session.score || 0) + gained;
+        session.correctCount = (session.correctCount || 0) + 1;
         await sock.sendMessage(chatId, { text: `✅ Correct! (+${gained})` }, { quoted: message });
         games.quiz.set(chatId, session);
         await askNextPersonal(sock, chatId);
