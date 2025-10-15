@@ -210,7 +210,7 @@ async function bibleCommand(sock, chatId, message, args) {
 
       // Help
       if (!mode || mode === 'help') {
-        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n• .bible quiz [personal] [n] — start solo quiz (default n=${PERSONAL_DEFAULT_QUESTIONS})\n• .bible quiz speed <n> — multiplayer, first correct scores\n• .bible quiz duel <n> — two players, alternating turns\n• .bible quiz lb [group|global] [N] — show leaderboard\n• .bible quiz enable|disable — toggle in this group (admin)\n• .bible quiz config <questions|attempts|seconds> <n> — set group cfg (admin)\n• .bible quiz resetlb [group|global] — reset leaderboard (admin/global sudo)\n• During solo quiz: answer A-D or 1-4; HINT, SKIP, or STOP` }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz\n\n• .bible quiz [personal] [n] — start solo quiz (default n=${PERSONAL_DEFAULT_QUESTIONS})\n• .bible quiz speed <n> — multiplayer, first correct scores\n• .bible quiz duel <n> — two players, alternating turns\n• .bible quiz lb [group|global] [N] — show leaderboard\n• .bible quiz enable|disable — toggle in this group (admin)\n• .bible quiz config <questions|attempts|seconds|speed_seconds|speed_total_seconds|duel_seconds|duel_total_seconds> <n> — set group cfg (admin)\n• .bible quiz resetlb [group|global] — reset leaderboard (admin/global sudo)\n• During solo quiz: answer A-D or 1-4; HINT, SKIP, or STOP` }, { quoted: message });
         return;
       }
 
@@ -242,8 +242,9 @@ async function bibleCommand(sock, chatId, message, args) {
         if (!admin.isSenderAdmin && !message.key.fromMe) { await sock.sendMessage(chatId, { text: 'Only group admins can change quiz settings.' }, { quoted: message }); return; }
         const field = (args[2] || '').toLowerCase();
         const val = parseInt(args[3] || '', 10);
-        if (!['questions','attempts','seconds'].includes(field) || !Number.isFinite(val) || val <= 0) {
-          await sock.sendMessage(chatId, { text: 'Usage: .bible quiz config <questions|attempts|seconds> <number>' }, { quoted: message });
+        const allowed = ['questions','attempts','seconds','speed_seconds','speed_total_seconds','duel_seconds','duel_total_seconds'];
+        if (!allowed.includes(field) || !Number.isFinite(val) || val <= 0) {
+          await sock.sendMessage(chatId, { text: 'Usage: .bible quiz config <questions|attempts|seconds|speed_seconds|speed_total_seconds|duel_seconds|duel_total_seconds> <number>' }, { quoted: message });
           return;
         }
         const saved = await setBibleQuizConfig(chatId, { [field]: val });
@@ -287,10 +288,13 @@ async function bibleCommand(sock, chatId, message, args) {
       }
 
       if (mode === 'speed') {
-        const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
+        const cfg = (await getBibleQuizConfig(chatId)) || {};
+        const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : (cfg.questions || 5);
+        const perQ = parseInt(cfg.speed_seconds || '0', 10) || 15;
+        const totalSec = parseInt(cfg.speed_total_seconds || '0', 10) || 0;
         games.multi.set(chatId, {
           mode: 'speed', stage: 'lobby', host: sender, players: new Set([sender]), scores: new Map([[sender, 0]]),
-          total, asked: 0, current: null, answered: false
+          total, asked: 0, current: null, answered: false, perQuestionSeconds: perQ, endsAt: (totalSec>0? Date.now()+totalSec*1000:0)
         });
         await sock.sendMessage(chatId, { text: `🧠 Bible Quiz — Speed Race\nQuestions: ${total}\nType JOIN to enter. Lobby closes in 30s.` }, { quoted: message });
         setTimeout(async () => {
@@ -302,10 +306,13 @@ async function bibleCommand(sock, chatId, message, args) {
         }, 30000);
         return;
       } else if (mode === 'duel') {
-        const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
+        const cfg = (await getBibleQuizConfig(chatId)) || {};
+        const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : (cfg.questions || 5);
+        const turnSec = parseInt(cfg.duel_seconds || '0', 10) || 10;
+        const totalSec = parseInt(cfg.duel_total_seconds || '0', 10) || 0;
         games.multi.set(chatId, {
           mode: 'duel', stage: 'lobby', host: sender, players: [sender], scores: new Map(),
-          total, asked: 0, current: null, turn: 0, timeout: null
+          total, asked: 0, current: null, turn: 0, timeout: null, turnSeconds: turnSec, endsAt: (totalSec>0? Date.now()+totalSec*1000:0)
         });
         await sock.sendMessage(chatId, { text: `🧠 Bible Quiz — Two Players\nQuestions each: ${total}\nHost joined. Waiting for 1 more player. Type JOIN (exactly 2 players). Lobby closes in 30s.` }, { quoted: message });
         setTimeout(async () => {
@@ -857,12 +864,13 @@ async function showLeaderboard(sock, chatId, scores) {
 }
 async function askNextSpeed(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
+  if (st.endsAt && Date.now() >= st.endsAt) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
   if (st.asked >= st.total) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
   const q = await sampleQuestion(); st.current = q; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
   const opts = q.options.map((o,i)=>`${i+1}. ${o}`).join('\n');
-  await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${q.q}\n${opts}\n⏱️ First correct answer gets 10 points!` });
-  // 15s timeout to move on
-  setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${q.correct}`}); await askNextSpeed(sock, chatId); }, 15000);
+  const perSec = st.perQuestionSeconds || 15;
+  await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${q.q}\n${opts}\n⏱️ ${perSec}s — first correct gets 10 points!` });
+  setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${q.correct}`}); await askNextSpeed(sock, chatId); }, perSec * 1000);
 }
 async function askNextRiddleSpeed(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
@@ -947,10 +955,12 @@ async function finishGenericPersonal(sock, chatId, session, label) {
 }
 async function askNextDuel(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
+  if (st.endsAt && Date.now() >= st.endsAt) { await finishDuel(sock, chatId, st); games.multi.delete(chatId); return; }
   const player = st.players[st.turn % 2];
   const q = await sampleQuestion(); st.current = { q: q.q, correct: q.correct, options: [] }; games.multi.set(chatId, st);
-  await sock.sendMessage(chatId, { text: `@${player.split('@')[0]}'s turn: ${q.q}\n⏱️ 10s`, mentions:[player] });
-  clearTimeout(st.timeout); st.timeout = setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st) return; s.asked += 1; s.turn += 1; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${q.correct}`}); if (s.asked >= s.total*2) { await finishDuel(sock, chatId, s); games.multi.delete(chatId); } else { await askNextDuel(sock, chatId); } }, 10000);
+  const perTurn = st.turnSeconds || 10;
+  await sock.sendMessage(chatId, { text: `@${player.split('@')[0]}'s turn: ${q.q}\n⏱️ ${perTurn}s`, mentions:[player] });
+  clearTimeout(st.timeout); st.timeout = setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st) return; s.asked += 1; s.turn += 1; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${q.correct}`}); if (s.asked >= s.total*2) { await finishDuel(sock, chatId, s); games.multi.delete(chatId); } else { await askNextDuel(sock, chatId); } }, perTurn * 1000);
 }
 async function finishSpeed(sock, chatId, st) {
   const sorted = Array.from(st.scores.entries()).sort((a,b)=>b[1]-a[1]);
