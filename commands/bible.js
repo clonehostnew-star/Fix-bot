@@ -143,15 +143,21 @@ async function finishPersonal(sock, chatId, session) {
   await sock.sendMessage(chatId, { text: `🏁 Quiz finished!\nScore: ${totalPoints} points out of ${session.total * 10}.` });
 }
 
-// Fetch a single verse or passage using a reference string like "Genesis 1:2"
-async function fetchBibleVerse(ref) {
+// Fetch passage using API, supports version selection (default KJV if unset)
+// Supports verse "Job 19:25" and chapter "Job 19" modes.
+async function fetchBiblePassage(ref, version) {
   try {
     if (!fetch) return null;
-    const url = `https://bible-api.com/${encodeURIComponent(ref)}`;
+    const ver = (version || process.env.BIBLE_VERSION || '').toLowerCase();
+    // Primary API: bible-api.com supports versions via query (?translation=)
+    let url = `https://bible-api.com/${encodeURIComponent(ref)}`;
+    if (ver) url += `?translation=${encodeURIComponent(ver)}`;
     const res = await fetch(url);
     if (!res.ok) return null;
     const data = await res.json();
-    return { text: (data.text || '').trim(), reference: data.reference };
+    // bible-api.com returns entire chapter text if only chapter provided
+    const text = (data.text || '').trim();
+    return { text, reference: data.reference };
   } catch { return null; }
 }
 
@@ -161,17 +167,38 @@ async function bibleCommand(sock, chatId, message, args) {
   const sub = (args[0] || '').toLowerCase();
   switch (sub) {
     case 'study': {
+      const { setBibleStudyVersion, getBibleStudyVersion } = require('../lib/index');
       const join = args.slice(1).join(' ').trim();
       if (!join) {
-        return sock.sendMessage(chatId, { text: 'Usage: .bible study <Book Chapter:Verse>\nExample: .bible study Job 19:25' }, { quoted: message });
+        return sock.sendMessage(chatId, { text: 'Usage:\n• .bible study <Book Chapter[:Verse]>\n• .bible study version <KJV|NIV|ESV|...>\nExamples:\n.bible study Job 19:25\n.bible study Job 19\n.bible study version KJV' }, { quoted: message });
       }
-      const m = join.match(/^([A-Za-z ]+)\s+(\d+):(\d+)$/);
-      if (!m) return sock.sendMessage(chatId,{ text:'❌ Format: <Book Chapter:Verse> e.g., Job 19:25' },{ quoted: message });
-      const book = m[1].trim(); const chapter = parseInt(m[2]); const verseNum = parseInt(m[3]);
-      bibleState.set(chatId, { book, chapter, verse: verseNum });
-      const verse = await fetchBibleVerse(`${book} ${chapter}:${verseNum}`);
-      if (!verse) return await sock.sendMessage(chatId, { text: '❌ Failed to fetch verse.' }, { quoted: message });
-      await sock.sendMessage(chatId, { text: `📖 ${book} ${chapter}:${verseNum}\n\n${verse.text}\n\nType "continue" to read next verse.` }, { quoted: message });
+      // Version change
+      if (join.toLowerCase().startsWith('version ')) {
+        const v = join.split(/\s+/)[1] || '';
+        if (!v) { await sock.sendMessage(chatId, { text: 'Usage: .bible study version <KJV|NIV|ESV|...>' }, { quoted: message }); return; }
+        const saved = await setBibleStudyVersion(chatId, v);
+        await sock.sendMessage(chatId, { text: `Bible study version set to ${saved.toUpperCase()}` }, { quoted: message });
+        return;
+      }
+      // Parse chapter or verse
+      const mVerse = join.match(/^([A-Za-z ]+)\s+(\d+):(\d+)$/);
+      const mChapter = join.match(/^([A-Za-z ]+)\s+(\d+)$/);
+      const version = await getBibleStudyVersion(chatId);
+      if (mVerse) {
+        const book = mVerse[1].trim(); const chapter = parseInt(mVerse[2]); const verseNum = parseInt(mVerse[3]);
+        bibleState.set(chatId, { book, chapter, verse: verseNum });
+        const verse = await fetchBiblePassage(`${book} ${chapter}:${verseNum}`, version);
+        if (!verse) return await sock.sendMessage(chatId, { text: '❌ Failed to fetch verse.' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `📖 ${book} ${chapter}:${verseNum} (${(version||'').toUpperCase()||'KJV'})\n\n${verse.text}\n\nType "continue" to read next verse.` }, { quoted: message });
+      } else if (mChapter) {
+        const book = mChapter[1].trim(); const chapter = parseInt(mChapter[2]);
+        bibleState.set(chatId, { book, chapter, verse: 1 });
+        const passage = await fetchBiblePassage(`${book} ${chapter}`, version);
+        if (!passage) return await sock.sendMessage(chatId, { text: '❌ Failed to fetch chapter.' }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `📖 ${book} ${chapter} (${(version||'').toUpperCase()||'KJV'})\n\n${passage.text}\n\nType "continue" to read next verse or chapter.` }, { quoted: message });
+      } else {
+        await sock.sendMessage(chatId, { text: '❌ Format: <Book Chapter[:Verse]> e.g., Job 19 or Job 19:25' }, { quoted: message });
+      }
       break;
     }
     case 'quiz': {
@@ -277,10 +304,10 @@ async function bibleCommand(sock, chatId, message, args) {
       } else if (mode === 'duel') {
         const total = (!isNaN(numQ) && numQ > 0 && numQ <= 50) ? numQ : 5;
         games.multi.set(chatId, {
-          mode: 'duel', stage: 'lobby', host: sender, players: [], scores: new Map(),
+          mode: 'duel', stage: 'lobby', host: sender, players: [sender], scores: new Map(),
           total, asked: 0, current: null, turn: 0, timeout: null
         });
-        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz — Two Players\nQuestions each: ${total}\nType JOIN to enter (exactly 2 players). Lobby closes in 30s.` }, { quoted: message });
+        await sock.sendMessage(chatId, { text: `🧠 Bible Quiz — Two Players\nQuestions each: ${total}\nHost joined. Waiting for 1 more player. Type JOIN (exactly 2 players). Lobby closes in 30s.` }, { quoted: message });
         setTimeout(async () => {
           const st = games.multi.get(chatId);
           if (!st || st.mode !== 'duel' || st.stage !== 'lobby') return;
@@ -578,14 +605,24 @@ async function handleBiblePassive(sock, chatId, message) {
   }
   if (body.toLowerCase() === 'continue' && bibleState.has(chatId)) {
     const s = bibleState.get(chatId);
+    const { getBibleStudyVersion } = require('../lib/index');
+    const version = await getBibleStudyVersion(chatId);
     s.verse += 1;
-    const verse = await fetchBibleVerse(`${s.book} ${s.chapter}:${s.verse}`);
-    if (!verse) {
-      await sock.sendMessage(chatId,{ text:'End of chapter or failed to fetch.'},{quoted:message});
-      bibleState.delete(chatId);
+    let verse = await fetchBiblePassage(`${s.book} ${s.chapter}:${s.verse}`, version);
+    if (!verse || !verse.text) {
+      // Try moving to next chapter
+      s.chapter += 1; s.verse = 1;
+      verse = await fetchBiblePassage(`${s.book} ${s.chapter}`, version);
+      if (!verse || !verse.text) {
+        await sock.sendMessage(chatId,{ text:'End of book or failed to fetch.'},{quoted:message});
+        bibleState.delete(chatId);
+        return;
+      }
+      await sock.sendMessage(chatId,{ text:`📖 ${s.book} ${s.chapter} (${(version||'').toUpperCase()||'KJV'})\n\n${verse.text}\n\nType "continue" for next verse or chapter.`},{quoted:message});
+      bibleState.set(chatId, s);
       return;
     }
-    await sock.sendMessage(chatId,{ text:`📖 ${s.book} ${s.chapter}:${s.verse}\n\n${verse.text}\n\nType "continue" for next verse.`},{quoted:message});
+    await sock.sendMessage(chatId,{ text:`📖 ${s.book} ${s.chapter}:${s.verse} (${(version||'').toUpperCase()||'KJV'})\n\n${verse.text}\n\nType "continue" for next verse.`},{quoted:message});
     bibleState.set(chatId, s);
     return;
   }
@@ -719,7 +756,30 @@ async function handleBiblePassive(sock, chatId, message) {
 }
 
 function normalizeAnswer(s) { return (s||'').trim().toLowerCase(); }
-function sampleQuestion() {
+async function fetchQuizQuestion() {
+  try {
+    if (!fetch) return null;
+    // Example API endpoint (replace with your real quiz/riddle endpoints if available)
+    // Expected JSON: { type: 'mcq', question, choices: [], answer }
+    const base = process.env.BIBLE_QUIZ_API || '';
+    if (!base) return null;
+    const res = await fetch(`${base.replace(/\/$/,'')}/quiz`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (j && Array.isArray(j.choices) && typeof j.answer !== 'undefined') {
+      return {
+        q: j.question,
+        correct: String(j.answer).trim().toLowerCase(),
+        options: j.choices
+      };
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function sampleQuestion() {
+  const api = await fetchQuizQuestion();
+  if (api) return api;
   const bank = [
     { q: 'Who said: "For I know that my redeemer lives"?', correct: 'job', choices: ['Job','David','Moses','Paul'] },
     { q: 'Where is "In the beginning God created the heavens and the earth"?', correct: 'genesis 1:1', choices: ['Genesis 1:1','John 1:1','Exodus 1:1','Psalms 1:1'] },
@@ -729,14 +789,50 @@ function sampleQuestion() {
   const options = [...item.choices].sort(()=>Math.random()-0.5);
   return { q: item.q, correct: item.correct, options };
 }
-function sampleRiddle() {
+async function fetchRiddle() {
+  try {
+    if (!fetch) return null;
+    const base = process.env.BIBLE_RIDDLE_API || '';
+    if (!base) return null;
+    const res = await fetch(`${base.replace(/\/$/,'')}/riddle`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (j && j.question && j.answer) {
+      return { q: j.question, a: String(j.answer).toLowerCase(), h: j.hint || '' };
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function sampleRiddle() {
+  const api = await fetchRiddle();
+  if (api) return api;
   const bank = [
     { q: 'Oldest man yet died before his father?', a: 'methuselah', h: 'Genesis 5:27' },
     { q: 'Walked with God and was not?', a: 'enoch', h: 'Genesis 5:24' },
   ];
   return bank[Math.floor(Math.random()*bank.length)];
 }
-function sampleScramble() {
+async function fetchScramble() {
+  try {
+    if (!fetch) return null;
+    const base = process.env.BIBLE_SCRAMBLE_API || '';
+    if (!base) return null;
+    const res = await fetch(`${base.replace(/\/$/,'')}/scramble`);
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (j && j.word) {
+      const word = String(j.word).toUpperCase();
+      const scrambled = (j.scrambled || word.split('').sort(()=>Math.random()-0.5).join(''));
+      return { w: word, h: j.hint || '', scrambled };
+    }
+    return null;
+  } catch { return null; }
+}
+
+async function sampleScramble() {
+  const api = await fetchScramble();
+  if (api) return api;
   const words = [ {w:'GENESIS',h:'First book'}, {w:'EXODUS',h:'Departure from Egypt'}, {w:'GOSPEL',h:'Good news'} ];
   const w = words[Math.floor(Math.random()*words.length)];
   const scrambled = w.w.split('').sort(()=>Math.random()-0.5).join('');
@@ -762,7 +858,7 @@ async function showLeaderboard(sock, chatId, scores) {
 async function askNextSpeed(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
   if (st.asked >= st.total) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
-  const q = sampleQuestion(); st.current = q; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
+  const q = await sampleQuestion(); st.current = q; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
   const opts = q.options.map((o,i)=>`${i+1}. ${o}`).join('\n');
   await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${q.q}\n${opts}\n⏱️ First correct answer gets 10 points!` });
   // 15s timeout to move on
@@ -771,7 +867,7 @@ async function askNextSpeed(sock, chatId) {
 async function askNextRiddleSpeed(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
   if (st.asked >= st.total) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
-  const r = sampleRiddle(); st.current = { q: r.q, correct: r.a, options: [] }; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
+  const r = await sampleRiddle(); st.current = { q: r.q, correct: r.a, options: [] }; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
   await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${r.q}\n⏱️ First correct answer gets 10 points!` });
   setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${r.a}`}); await askNextRiddleSpeed(sock, chatId); }, 15000);
 }
@@ -801,7 +897,7 @@ async function askNextRiddlePersonal(sock, chatId) {
 async function askNextScrambleSpeed(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
   if (st.asked >= st.total) { await finishSpeed(sock, chatId, st); games.multi.delete(chatId); return; }
-  const w = sampleScramble(); st.current = { q: `Unscramble this: ${w.scrambled}\nHint: ${w.h}`, correct: w.w.toLowerCase(), options: [] }; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
+  const w = await sampleScramble(); st.current = { q: `Unscramble this: ${w.scrambled}\nHint: ${w.h}`, correct: w.w.toLowerCase(), options: [] }; st.answered = false; st.asked += 1; games.multi.set(chatId, st);
   await sock.sendMessage(chatId, { text: `Q${st.asked}/${st.total}: ${st.current.q}\n⏱️ First correct answer gets 10 points!` });
   setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st||s.answered) return; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${w.w}`}); await askNextScrambleSpeed(sock, chatId); }, 15000);
 }
@@ -852,7 +948,7 @@ async function finishGenericPersonal(sock, chatId, session, label) {
 async function askNextDuel(sock, chatId) {
   const st = games.multi.get(chatId); if (!st) return;
   const player = st.players[st.turn % 2];
-  const q = sampleQuestion(); st.current = { q: q.q, correct: q.correct, options: [] }; games.multi.set(chatId, st);
+  const q = await sampleQuestion(); st.current = { q: q.q, correct: q.correct, options: [] }; games.multi.set(chatId, st);
   await sock.sendMessage(chatId, { text: `@${player.split('@')[0]}'s turn: ${q.q}\n⏱️ 10s`, mentions:[player] });
   clearTimeout(st.timeout); st.timeout = setTimeout(async()=>{ const s=games.multi.get(chatId); if(!s||s!==st) return; s.asked += 1; s.turn += 1; await sock.sendMessage(chatId,{text:`⏰ Time up! Answer: ${q.correct}`}); if (s.asked >= s.total*2) { await finishDuel(sock, chatId, s); games.multi.delete(chatId); } else { await askNextDuel(sock, chatId); } }, 10000);
 }
