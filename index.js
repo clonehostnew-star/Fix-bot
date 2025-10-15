@@ -40,6 +40,7 @@ const NodeCache = require("node-cache")
 // Using a lightweight persisted store instead of makeInMemoryStore (compat across versions)
 const pino = require("pino")
 const readline = require("readline")
+const http = require("http")
 const { parsePhoneNumber } = require("libphonenumber-js")
 const { PHONENUMBER_MCC } = require('@whiskeysockets/baileys/lib/Utils/generics')
 const { rmSync, existsSync } = require('fs')
@@ -63,14 +64,20 @@ setInterval(() => {
     }
 }, 60_000) // every 1 minute
 
-// Memory monitoring - Restart if RAM gets too high
+// Memory monitoring - configurable
+const MAX_MEMORY_MB = parseInt(process.env.MAX_MEMORY_MB || '0', 10) // 0 disables enforcement
+const RESTART_ON_MEMORY = process.env.RESTART_ON_MEMORY === 'true'
 setInterval(() => {
     const used = process.memoryUsage().rss / 1024 / 1024
-    if (used > 400) {
-        console.log('⚠️ RAM too high (>400MB), restarting bot...')
-        process.exit(1) // Panel will auto-restart
+    if (MAX_MEMORY_MB > 0 && used > MAX_MEMORY_MB) {
+        if (RESTART_ON_MEMORY) {
+            console.log(`⚠️ RAM too high (>${MAX_MEMORY_MB}MB), restarting bot...`)
+            process.exit(1)
+        } else {
+            console.log(`⚠️ High RAM usage: ${used.toFixed(0)}MB (limit ${MAX_MEMORY_MB}MB). Set RESTART_ON_MEMORY=true to auto-restart.`)
+        }
     }
-}, 30_000) // check every 30 seconds
+}, 30_000)
 
 let phoneNumber = ""
 let owner
@@ -84,12 +91,18 @@ try {
 
 global.botname = settings.botName;
 global.themeemoji = "•"
-// Enable pairing flow by default when running interactively, or when --pairing-code is passed
-const pairingCode = process.argv.includes("--pairing-code") || (!!process.stdin.isTTY)
+// Pairing/QR mode selection (env-first)
+const ENV_PAIRING = process.env.PAIRING_CODE
+const ENV_PRINT_QR = process.env.PRINT_QR
+const HAS_TTY = !!process.stdin.isTTY
+const pairingDesired = (ENV_PAIRING === 'true') || (ENV_PAIRING === 'false' ? false : (process.argv.includes("--pairing-code") || HAS_TTY))
+const hasPhoneInput = !!process.env.PHONE_NUMBER || HAS_TTY
+const pairingActive = pairingDesired && hasPhoneInput
+const printQRInTerminalFlag = (ENV_PRINT_QR === 'true') ? true : ((ENV_PRINT_QR === 'false') ? false : !pairingActive)
 const useMobile = process.argv.includes("--mobile")
 
 // Only create readline interface if we're in an interactive environment
-const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null
+const rl = HAS_TTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null
 const question = (text) => {
     if (rl) {
         return new Promise((resolve) => rl.question(text, resolve))
@@ -108,7 +121,7 @@ async function startXeonBotInc() {
     const XeonBotInc = makeWASocket({
         version,
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: !pairingCode,
+        printQRInTerminal: printQRInTerminalFlag,
         browser: ["Ubuntu", "Chrome", "20.0.04"],
         auth: {
             creds: state.creds,
@@ -210,38 +223,42 @@ async function startXeonBotInc() {
     XeonBotInc.serializeM = (m) => smsg(XeonBotInc, m, store)
 
     // Handle pairing code
-    if (pairingCode && !XeonBotInc.authState.creds.registered) {
+    if (pairingActive && !XeonBotInc.authState.creds.registered) {
         if (useMobile) throw new Error('Cannot use pairing code with mobile api')
 
-        // Always prompt in interactive mode; do not auto-fill from settings unless non-interactive
-        let phoneNumber
-        if (process.stdin.isTTY) {
+        // Prefer env PHONE_NUMBER; fallback to interactive prompt when TTY is available
+        let phoneNumber = (process.env.PHONE_NUMBER || '').toString()
+        if (!phoneNumber && rl) {
             phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
+        }
+        if (!phoneNumber) {
+            console.log(chalk.yellow('PAIRING_CODE requested but no PHONE_NUMBER and no TTY input available. Falling back to QR login...'))
+            // Nothing to do here; QR printing is controlled by printQRInTerminalFlag at socket creation
+            // Simply skip requesting pairing code
         } else {
-            phoneNumber = (process.env.PHONE_NUMBER || global.phoneNumber || '').toString()
-        }
 
-        // Clean the phone number - remove any non-digit characters
-        phoneNumber = phoneNumber.replace(/[^0-9]/g, '')
+            // Clean the phone number - remove any non-digit characters
+            phoneNumber = phoneNumber.replace(/[^0-9]/g, '')
 
-        // Validate the phone number using awesome-phonenumber
-        const pn = require('awesome-phonenumber');
-        if (!pn('+' + phoneNumber).isValid()) {
-            console.log(chalk.red('Invalid phone number. Please enter your full international number (e.g., 15551234567 for US, 447911123456 for UK, etc.) without + or spaces.'));
-            process.exit(1);
-        }
-
-        setTimeout(async () => {
-            try {
-                let code = await XeonBotInc.requestPairingCode(phoneNumber)
-                code = code?.match(/.{1,4}/g)?.join("-") || code
-                console.log(chalk.black(chalk.bgGreen(`Your Pairing Code : `)), chalk.black(chalk.white(code)))
-                console.log(chalk.yellow(`\nPlease enter this code in your WhatsApp app:\n1. Open WhatsApp\n2. Go to Settings > Linked Devices\n3. Tap "Link a Device"\n4. Enter the code shown above`))
-            } catch (error) {
-                console.error('Error requesting pairing code:', error)
-                console.log(chalk.red('Failed to get pairing code. Please check your phone number and try again.'))
+            // Validate the phone number using awesome-phonenumber
+            const pn = require('awesome-phonenumber');
+            if (!pn('+' + phoneNumber).isValid()) {
+                console.log(chalk.red('Invalid phone number. Please enter your full international number (e.g., 15551234567 for US, 447911123456 for UK, etc.) without + or spaces.'));
+                process.exit(1);
             }
-        }, 3000)
+
+            setTimeout(async () => {
+                try {
+                    let code = await XeonBotInc.requestPairingCode(phoneNumber)
+                    code = code?.match(/.{1,4}/g)?.join("-") || code
+                    console.log(chalk.black(chalk.bgGreen(`Your Pairing Code : `)), chalk.black(chalk.white(code)))
+                    console.log(chalk.yellow(`\nPlease enter this code in your WhatsApp app:\n1. Open WhatsApp\n2. Go to Settings > Linked Devices\n3. Tap "Link a Device"\n4. Enter the code shown above`))
+                } catch (error) {
+                    console.error('Error requesting pairing code:', error)
+                    console.log(chalk.red('Failed to get pairing code. Please check your phone number and try again.'))
+                }
+            }, 3000)
+        }
     }
 
     // Connection handling
@@ -397,3 +414,17 @@ fs.watchFile(file, () => {
     delete require.cache[file]
     require(file)
 })
+
+// Optional keepalive HTTP server for platforms that require listening on a port
+try {
+    const enableKeepalive = process.env.KEEPALIVE === 'true'
+    const port = parseInt(process.env.PORT || '', 10)
+    if (enableKeepalive && port) {
+        http.createServer((req, res) => {
+            res.writeHead(200, { 'Content-Type': 'text/plain' })
+            res.end('OK')
+        }).listen(port, () => console.log(`Keepalive server listening on :${port}`))
+    }
+} catch (e) {
+    console.error('Failed to start keepalive server:', e?.message)
+}

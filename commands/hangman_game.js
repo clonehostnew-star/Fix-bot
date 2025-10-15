@@ -13,8 +13,8 @@ module.exports = async function hangmanGame(sock, chatId, message, args) {
 
   if (sub === 'start') {
     const u = await getUser(userId);
-    if ((u.wallet||0) < 5000) return sock.sendMessage(chatId, { text: '⚠️ Need $5,000 to start.' }, { quoted: message });
-    u.wallet -= 5000; await saveUser(u);
+    if ((u.wallet||0) < 100) return sock.sendMessage(chatId, { text: '⚠️ Need $100 to start.' }, { quoted: message });
+    u.wallet -= 100; await saveUser(u);
     const words = ['Banana','Laptop','Rocket','Coffee','Garden','Jacket','Yellow','Mother','Silver'];
     const word = words[Math.floor(Math.random()*words.length)].toLowerCase();
     hm.set(userId, { word, masked: word.replace(/./g,'➖'), attempts: 6, guessed: [] });
