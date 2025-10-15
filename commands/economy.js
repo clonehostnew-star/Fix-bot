@@ -1,4 +1,4 @@
-const { getUser, saveUser, addCoins } = require('../lib/economyStore');
+const { getUser, saveUser, addCoins, rewardWithBoost, getBankCap } = require('../lib/economyStore');
 
 module.exports = async function economyCommand(sock, chatId, message, args) {
   const sub = (args[0] || '').toLowerCase();
@@ -46,8 +46,8 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       if (!user.inventory || !user.inventory.includes(item)) return await sock.sendMessage(chatId,{ text:'❌ You do not own this item.' },{ quoted: message });
       if (!global.auctions) global.auctions = new Map();
       if (global.auctions.has(chatId)) return await sock.sendMessage(chatId,{ text:'An auction is already running here.' },{ quoted: message });
-      global.auctions.set(chatId,{ item, owner:userId, highestBid:start, highestBidder:null, ends: Date.now()+60000 });
-      await sock.sendMessage(chatId,{ text:`🏦 Auction started for ${item}. Starting at $${start}. Place bids with .eco bid <amount>. Ends in 60s.` },{ quoted: message });
+      global.auctions.set(chatId,{ item, owner:userId, highestBid:start, highestBidder:null, ends: Date.now()+60000, lastBidAt: 0 });
+      await sock.sendMessage(chatId,{ text:`🏦 Auction started for ${item}. Starting at $${start}. Place bids with .eco bid <amount>. Ends in 60s (anti-snipe +15s).` },{ quoted: message });
       setTimeout(async ()=>{
         const a = global.auctions.get(chatId); if (!a) return;
         if (!a.highestBidder) {
@@ -79,9 +79,30 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       if (amt <= a.highestBid) return await sock.sendMessage(chatId,{ text:`Bid must be > $${a.highestBid}.` },{ quoted: message });
       const bidder = await getUser(userId);
       if ((bidder.wallet||0) < amt) return await sock.sendMessage(chatId,{ text:'❌ Insufficient wallet for this bid.' },{ quoted: message });
-      a.highestBid = amt; a.highestBidder = userId; global.auctions.set(chatId,a);
-      await sock.sendMessage(chatId,{ text:`✅ Highest bid updated: $${amt} by @${userId.split('@')[0]}`, mentions:[userId] },{ quoted: message });
+      a.highestBid = amt; a.highestBidder = userId; a.lastBidAt = Date.now();
+      const remaining = a.ends - Date.now();
+      if (remaining <= 10000) a.ends += 15000; // extend by 15s when sniped in last 10s
+      global.auctions.set(chatId,a);
+      await sock.sendMessage(chatId,{ text:`✅ Highest bid updated: $${amt} by @${userId.split('@')[0]} (ends in ~${Math.ceil((a.ends-Date.now())/1000)}s)`, mentions:[userId] },{ quoted: message });
       break;
+    }
+    case 'trade': {
+      // .eco trade @user <item|$amount>
+      const target = message.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0];
+      if (!target) return await sock.sendMessage(chatId,{ text:'Usage: .eco trade @user <item-id|$amount>' },{ quoted: message });
+      const token = (args[1]||'').toLowerCase();
+      if (!token) return await sock.sendMessage(chatId,{ text:'Specify an item id or $amount.' },{ quoted: message });
+      if (token.startsWith('$')) {
+        const amt = parseInt(token.replace(/[^0-9]/g,''));
+        if (!amt || amt<=0) return await sock.sendMessage(chatId,{ text:'Invalid amount.' },{ quoted: message });
+        if ((user.wallet||0) < amt) return await sock.sendMessage(chatId,{ text:'❌ Not enough wallet.' },{ quoted: message });
+        const v = await getUser(target); user.wallet -= amt; v.wallet = (v.wallet||0)+amt; await saveUser(user); await saveUser(v);
+        return await sock.sendMessage(chatId,{ text:`🤝 Transferred $${amt} to @${target.split('@')[0]}.`, mentions:[target] },{ quoted: message });
+      } else {
+        if (!user.inventory || !user.inventory.includes(token)) return await sock.sendMessage(chatId,{ text:'❌ You do not own that item.' },{ quoted: message });
+        const v = await getUser(target); v.inventory = v.inventory || []; v.inventory.push(token); user.inventory = (user.inventory||[]).filter(x=>x!==token); await saveUser(user); await saveUser(v);
+        return await sock.sendMessage(chatId,{ text:`🤝 Traded item '${token}' to @${target.split('@')[0]}.`, mentions:[target] },{ quoted: message });
+      }
     }
     case 'blackjack': {
       const bet = parseInt(args[1]);
@@ -169,7 +190,8 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
         await sock.sendMessage(chatId, { text: `⏳ Wait ${mins}m before working again.` }, { quoted: message });
         break;
       }
-      const amt = Math.floor(Math.random()*400)+100;
+      let amt = Math.floor(Math.random()*400)+100;
+      amt = rewardWithBoost(user, amt);
       user.wallet = (user.wallet||0) + amt;
       user.lastWork = new Date();
       await saveUser(user);
@@ -180,14 +202,23 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
     case 'dep': {
       if ((args[1]||'').toLowerCase()==='all') {
         const all = user.wallet||0; if (all<=0) return await sock.sendMessage(chatId,{ text:'❌ Wallet is empty.' },{ quoted: message });
-        user.wallet = 0; user.bank = (user.bank||0)+all; await saveUser(user);
+        const cap = getBankCap(user);
+        const room = Math.max(0, cap - (user.bank||0));
+        const toDep = Math.min(all, room);
+        user.wallet = (user.wallet||0) - toDep; user.bank = (user.bank||0)+toDep; await saveUser(user);
+        const overflow = all - toDep;
+        if (overflow>0) await sock.sendMessage(chatId,{ text:`⚠️ Bank cap reached. Deposited $${toDep}, returned $${overflow}.` },{ quoted: message });
         await sock.sendMessage(chatId,{ text: `✅ Deposited ${money(all)}.` },{ quoted: message });
         break;
       }
       const n = parseInt(args[1]);
       if (isNaN(n) || n<=0) return await sock.sendMessage(chatId, { text: '❌ Provide amount: .eco dep <amount>|all' }, { quoted: message });
       if ((user.wallet||0) < n) return await sock.sendMessage(chatId, { text: '❌ Not enough wallet balance.' }, { quoted: message });
-      user.wallet -= n; user.bank = (user.bank||0)+n; await saveUser(user);
+      const cap = getBankCap(user);
+      const room = Math.max(0, cap - (user.bank||0));
+      const toDep = Math.min(n, room);
+      user.wallet -= toDep; user.bank = (user.bank||0)+toDep; await saveUser(user);
+      if (toDep < n) await sock.sendMessage(chatId,{ text:`⚠️ Bank cap reached. Deposited $${toDep}, returned $${(n-toDep)}.` },{ quoted: message });
       await sock.sendMessage(chatId, { text: `✅ Deposited ${money(n)}.` }, { quoted: message });
       break;
     }
