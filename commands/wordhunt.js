@@ -30,7 +30,15 @@ async function startWordHunt(sock, chatId, message, args) {
   setTimeout(async ()=>{
     const h = hunts.get(chatId); if(!h) return;
     let winner=null,score=-1; for (const [pid,cnt] of h.players.entries()) { if (cnt>score){score=cnt;winner=pid;} }
-    if (winner) { const u = await getUser(winner); u.wallet=(u.wallet||0)+(score*50); await saveUser(u); await sock.sendMessage(chatId,{text:`🏁 Hunt over! Winner: @${winner.split('@')[0]} — ${score} pts (+$${score*50})` ,mentions:[winner]}); }
+    if (winner) { 
+      const u = await getUser(winner); 
+      const base = score*50; 
+      const now = Date.now();
+      const boosted = u && u.boostExpiresAt && (new Date(u.boostExpiresAt).getTime() > now);
+      const payoff = boosted ? Math.floor(base * 1.2) : base;
+      u.wallet=(u.wallet||0)+payoff; await saveUser(u); 
+      await sock.sendMessage(chatId,{text:`🏁 Hunt over! Winner: @${winner.split('@')[0]} — ${score} pts (+$${payoff}${boosted?' with boost':''})` ,mentions:[winner]}); 
+    }
     else await sock.sendMessage(chatId,{text:'No participants.'});
     hunts.delete(chatId);
   }, seconds*1000);

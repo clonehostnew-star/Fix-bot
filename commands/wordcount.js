@@ -74,8 +74,17 @@ async function finishWordCount(sock, chatId, s) {
   let winner = null, max = -1;
   for (const [pid, sc] of s.scores.entries()) { if (sc > max) { max = sc; winner = pid; } }
   if (winner && max > 0) {
-    try { const u = await getUser(winner); u.wallet = (u.wallet || 0) + (max * 50); await saveUser(u); } catch {}
-    await sock.sendMessage(chatId, { text: `🏁 Word Count Winner: @${winner.split('@')[0]} — ${max} pts (+$${max * 50})`, mentions: [winner] });
+    try { 
+      const u = await getUser(winner); 
+      const base = max * 50; 
+      // Lightweight inline boost (+20%)
+      const now = Date.now();
+      const boosted = u && u.boostExpiresAt && (new Date(u.boostExpiresAt).getTime() > now);
+      const payoff = boosted ? Math.floor(base * 1.2) : base;
+      u.wallet = (u.wallet || 0) + payoff; 
+      await saveUser(u); 
+      await sock.sendMessage(chatId, { text: `🏁 Word Count Winner: @${winner.split('@')[0]} — ${max} pts (+$${payoff}${boosted?' with boost':''})`, mentions: [winner] });
+    } catch {}
   } else {
     await sock.sendMessage(chatId, { text: 'No valid words submitted.' });
   }
