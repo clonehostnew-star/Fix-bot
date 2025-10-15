@@ -18,15 +18,28 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
     case 'daily': {
       const now = Date.now();
       const last = user.lastDaily ? new Date(user.lastDaily).getTime() : 0;
-      if (now - last < 24*60*60*1000) {
-        const hrs = 24 - Math.floor((now - last)/ (60*60*1000));
+      const DAY = 24*60*60*1000;
+      if (now - last < DAY) {
+        const hrs = Math.max(0, 24 - Math.floor((now - last)/ (60*60*1000)));
         await sock.sendMessage(chatId, { text: `⏳ Wait ${hrs}h to claim again.` }, { quoted: message });
         break;
       }
-      user.wallet = (user.wallet||0) + 1000;
+      // Streak handling
+      const yesterday = last ? last + DAY : 0;
+      const withinStreak = yesterday && Math.abs(now - yesterday) < (8*60*60*1000); // 8h grace
+      user.dailyStreak = withinStreak ? (user.dailyStreak||0)+1 : 1;
+      user.bestDailyStreak = Math.max(user.bestDailyStreak||0, user.dailyStreak);
+      let base = 1000;
+      const bonus = Math.min(5000, 100 * (user.dailyStreak - 1)); // +100 per streak day, cap 5k
+      const total = base + bonus;
+      user.wallet = (user.wallet||0) + total;
       user.lastDaily = new Date();
+      // Achievements
+      user.achievements = user.achievements || {};
+      if (user.dailyStreak>=3) user.achievements.streak3 = true;
+      if (user.dailyStreak>=7) user.achievements.streak7 = true;
       await saveUser(user);
-      await sock.sendMessage(chatId, { text: `✅ Claimed daily: ${money(1000)}` }, { quoted: message });
+      await sock.sendMessage(chatId, { text: `✅ Claimed daily: ${money(total)} (streak ${user.dailyStreak}🔥)` }, { quoted: message });
       break;
     }
     case 'work': {
@@ -111,7 +124,12 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       if ((user.wallet||0) < bet) return await sock.sendMessage(chatId,{ text:'❌ Not enough wallet.' },{ quoted: message });
       const flip = Math.random()<0.5 ? 'heads' : 'tails';
       const win = flip===side;
+      // Anti-abuse: max bet 50% of wallet
+      const maxBet = Math.max(100, Math.floor((user.wallet||0) * 0.5));
+      if (bet > maxBet) return await sock.sendMessage(chatId,{ text:`⚠️ Max allowable bet right now is ${money(maxBet)}.` },{ quoted: message });
       user.wallet = (user.wallet||0) + (win ? bet : -bet);
+      // gambler achievement
+      user.achievements = user.achievements || {}; if (win) user.achievements.gambler = (user.achievements.gambler||0)+1;
       await saveUser(user);
       await sock.sendMessage(chatId,{ text:`🪙 Flip: *${flip.toUpperCase()}*\n${win?'🎉 You won ': '💔 You lost '}${money(bet)}.` },{ quoted: message });
       break;
@@ -132,14 +150,26 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       const amt = parseInt(args[1]);
       if (isNaN(amt) || amt<=0) return await sock.sendMessage(chatId,{ text:'Usage: .eco invest <amount>' },{ quoted: message });
       if ((user.wallet||0) < amt) return await sock.sendMessage(chatId,{ text:'❌ Not enough wallet.' },{ quoted: message });
+      // Risk tiers: .eco invest <amount> [low|mid|high]
+      const tier = (args[2]||'mid').toLowerCase();
       const outcome = Math.random();
       let delta = 0;
-      if (outcome < 0.45) delta = Math.floor(amt * (Math.random()*0.6 + 0.2)); // +20%..+80%
-      else if (outcome < 0.85) delta = -Math.floor(amt * (Math.random()*0.6 + 0.2)); // -20%..-80%
-      else delta = 0;
+      if (tier==='low') {
+        if (outcome < 0.55) delta = Math.floor(amt * (Math.random()*0.2 + 0.05)); // +5..+25%
+        else if (outcome < 0.95) delta = -Math.floor(amt * (Math.random()*0.2 + 0.02)); // -2..-22%
+        else delta = 0;
+      } else if (tier==='high') {
+        if (outcome < 0.35) delta = Math.floor(amt * (Math.random()*1.2 + 0.3)); // +30..+150%
+        else if (outcome < 0.9) delta = -Math.floor(amt * (Math.random()*0.8 + 0.2)); // -20..-100%
+        else delta = 0;
+      } else { // mid
+        if (outcome < 0.45) delta = Math.floor(amt * (Math.random()*0.6 + 0.2)); // +20..+80%
+        else if (outcome < 0.85) delta = -Math.floor(amt * (Math.random()*0.6 + 0.2)); // -20..-80%
+        else delta = 0;
+      }
       user.wallet = (user.wallet||0) + delta;
       await saveUser(user);
-      await sock.sendMessage(chatId,{ text:`📈 Investment result: ${delta>=0?'Profit':'Loss'} ${money(Math.abs(delta))}.` },{ quoted: message });
+      await sock.sendMessage(chatId,{ text:`📈 Investment (${tier}) result: ${delta>=0?'Profit':'Loss'} ${money(Math.abs(delta))}.` },{ quoted: message });
       break;
     }
     case 'loan': {
@@ -226,7 +256,7 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       break;
     }
     default: {
-      await sock.sendMessage(chatId, { text: `*Economy*\n\n.eco balance|bal\n.eco daily\n.eco work\n.eco dep <amt|all>\n.eco with <amt|all>\n.eco pay|give @user <amt>\n.eco rob @user\n.eco slots <bet>\n.eco cf <heads|tails> <bet>\n.eco dice <1-6> <bet>\n.eco invest <amount>\n.eco loan <amount>\n.eco repay <amount>\n.eco save <amount>\n.eco unsave <amount>\n.eco leaderboard|lb` }, { quoted: message });
+      await sock.sendMessage(chatId, { text: `*Economy*\n\n.eco balance|bal\n.eco daily\n.eco work\n.eco dep <amt|all>\n.eco with <amt|all>\n.eco pay|give @user <amt>\n.eco rob @user\n.eco slots <bet>\n.eco cf <heads|tails> <bet>\n.eco dice <1-6> <bet>\n.eco invest <amount> [low|mid|high]\n.eco loan <amount>\n.eco repay <amount>\n.eco save <amount>\n.eco unsave <amount>\n.eco leaderboard|lb` }, { quoted: message });
     }
   }
 }
