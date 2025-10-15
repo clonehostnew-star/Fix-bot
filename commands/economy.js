@@ -9,6 +9,51 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
   const user = await getUser(userId);
 
   switch (sub) {
+    case 'blackjack': {
+      const bet = parseInt(args[1]);
+      if (isNaN(bet) || bet<=0) return await sock.sendMessage(chatId,{ text:'Usage: .eco blackjack <bet>' },{ quoted: message });
+      if ((user.wallet||0) < bet) return await sock.sendMessage(chatId,{ text:'❌ Not enough wallet.' },{ quoted: message });
+      // Simple one-round blackjack simulation: player vs dealer, hit/stand auto strategy (hit < 17)
+      const deck = [];
+      const ranks = [2,3,4,5,6,7,8,9,10,'J','Q','A'];
+      for (let i=0;i<4;i++) for (const r of ranks) deck.push(r);
+      function draw() { const i = Math.floor(Math.random()*deck.length); return deck.splice(i,1)[0]; }
+      function val(hand){ let total=0, aces=0; for(const c of hand){ if(c==='J'||c==='Q') total+=10; else if(c==='A'){ aces++; total+=11; } else total+=c; } while(total>21 && aces>0){ total-=10; aces--; } return total; }
+      const player=[draw(),draw()], dealer=[draw(),draw()];
+      while(val(player)<17) player.push(draw());
+      while(val(dealer)<17) dealer.push(draw());
+      const pv=val(player), dv=val(dealer);
+      let delta=0, result;
+      if (pv>21) { delta = -bet; result='💥 You busted!'; }
+      else if (dv>21) { delta = bet; result='🎉 Dealer busted!'; }
+      else if (pv>dv) { delta = bet; result='🎉 You win!'; }
+      else if (pv<dv) { delta = -bet; result='💔 You lose!'; }
+      else { delta = 0; result='🤝 Push.'; }
+      user.wallet = (user.wallet||0) + delta;
+      await saveUser(user);
+      await sock.sendMessage(chatId,{ text:`🃏 Blackjack\nYou: ${player.join(', ')} (${pv})\nDealer: ${dealer.join(', ')} (${dv})\n${result} ${delta>=0?'+':'-'}$${Math.abs(delta)}` },{ quoted: message });
+      break;
+    }
+    case 'roulette': {
+      // .eco roulette <bet> <red|black|odd|even|number>
+      const bet = parseInt(args[1]);
+      const pick = (args[2]||'').toLowerCase();
+      if (isNaN(bet) || bet<=0 || !pick) return await sock.sendMessage(chatId,{ text:'Usage: .eco roulette <bet> <red|black|odd|even|0-36>' },{ quoted: message });
+      if ((user.wallet||0) < bet) return await sock.sendMessage(chatId,{ text:'❌ Not enough wallet.' },{ quoted: message });
+      const spin = Math.floor(Math.random()*37); // 0..36
+      const redNums = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+      let delta = -bet; let winText='';
+      if (['red','black','odd','even'].includes(pick)) {
+        const isWin = (pick==='red'&&redNums.has(spin)) || (pick==='black'&&spin!==0&&!redNums.has(spin)) || (pick==='odd'&&spin%2===1) || (pick==='even'&&spin!==0&&spin%2===0);
+        if (isWin) { delta = Math.floor(bet * 1.9) - bet; winText = '1:1'; }
+      } else {
+        const n = parseInt(pick); if (!isNaN(n) && n>=0 && n<=36 && n===spin) { delta = bet*35; winText = '35:1'; }
+      }
+      user.wallet = (user.wallet||0) + delta;
+      await saveUser(user);
+      await sock.sendMessage(chatId,{ text:`🎡 Roulette\nSpin: ${spin}\n${delta>0?`🎉 You won ${money(delta)} (${winText})`:`💔 You lost ${money(-delta)}`}` },{ quoted: message });
+      break;
+    }
     case 'balance':
     case 'bal': {
       const net = (user.wallet || 0) + (user.bank || 0) - (user.loans || 0);
@@ -253,6 +298,51 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
       if (entries.length===0) { await sock.sendMessage(chatId,{ text: 'No leaderboard data yet.' }, { quoted: message }); break; }
       const lines = entries.map((e,i)=> `${i+1}. @${(e.id||'').split('@')[0]} — ${money(e.total)}`).join('\n');
       await sock.sendMessage(chatId,{ text: `🏆 Top 20 Richest\n\n${lines}`, mentions: entries.map(e=>e.id) }, { quoted: message });
+      break;
+    }
+    case 'achievements': {
+      const a = user.achievements || {};
+      const list = [
+        `🔥 Streak 3: ${a.streak3?'✅':'❌'}`,
+        `🔥 Streak 7: ${a.streak7?'✅':'❌'}`,
+        `🎲 Gambler wins: ${a.gambler||0}`,
+      ].join('\n');
+      await sock.sendMessage(chatId,{ text:`🏅 Achievements\n${list}` },{ quoted: message });
+      break;
+    }
+    case 'interest': {
+      // Admin/owner could expose; here any user can trigger their own accrual with 24h cooldown
+      const now = Date.now();
+      const last = user.lastInterestAt ? new Date(user.lastInterestAt).getTime() : 0;
+      const DAY = 24*60*60*1000;
+      if (now - last < DAY) { const hrs = Math.ceil((DAY - (now-last))/ (60*60*1000)); return await sock.sendMessage(chatId,{ text:`⏳ Wait ${hrs}h before next interest.`},{quoted:message}); }
+      const rate = 0.01; // 1% daily
+      const gained = Math.floor((user.savings||0) * rate);
+      user.savings = (user.savings||0) + gained; user.lastInterestAt = new Date();
+      await saveUser(user);
+      await sock.sendMessage(chatId,{ text:`🏦 Savings interest accrued: ${money(gained)}. Savings: ${money(user.savings||0)}.`},{quoted:message});
+      break;
+    }
+    case 'bankrisk': {
+      // Risk event with 24h cooldown; small chance of bank fee/theft simulation
+      const now = Date.now();
+      const last = user.lastRiskAt ? new Date(user.lastRiskAt).getTime() : 0;
+      const DAY = 24*60*60*1000;
+      if (now - last < DAY) { const hrs = Math.ceil((DAY - (now-last))/ (60*60*1000)); return await sock.sendMessage(chatId,{ text:`⏳ Risk already evaluated. ${hrs}h left.`},{quoted:message}); }
+      user.lastRiskAt = new Date();
+      const roll = Math.random();
+      let delta = 0; let msg = 'All clear. No events today.';
+      if (roll < 0.05) { // bank fee 2%
+        delta = -Math.floor((user.bank||0)*0.02);
+        user.bank = Math.max(0,(user.bank||0)+delta);
+        msg = `Bank fee applied: ${money(-delta)}.`;
+      } else if (roll < 0.08) { // small theft from wallet
+        delta = -Math.min(user.wallet||0, Math.floor(Math.random()*300)+100);
+        user.wallet = (user.wallet||0)+delta;
+        msg = `Pickpocketed: ${money(-delta)} lost from wallet.`;
+      }
+      await saveUser(user);
+      await sock.sendMessage(chatId,{ text:`🚨 Risk report: ${msg}` },{ quoted: message });
       break;
     }
     default: {
