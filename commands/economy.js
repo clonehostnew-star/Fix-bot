@@ -9,6 +9,80 @@ module.exports = async function economyCommand(sock, chatId, message, args) {
   const user = await getUser(userId);
 
   switch (sub) {
+    case 'shop': {
+      const items = [
+        { id:'boost', name:'XP/Income Boost (24h)', price: 5000 },
+        { id:'lucky', name:'Lucky Charm (better odds for 24h)', price: 8000 },
+        { id:'vault', name:'Vault Upgrade (+$5,000 bank cap)', price: 10000 },
+      ];
+      const lines = items.map(i=>`• ${i.name} — $${i.price} (buy: .eco buy ${i.id})`).join('\n');
+      await sock.sendMessage(chatId,{ text:`🛒 Shop\n${lines}` },{ quoted: message });
+      break;
+    }
+    case 'buy': {
+      const item = (args[1]||'').toLowerCase();
+      if (!item) return await sock.sendMessage(chatId,{ text:'Usage: .eco buy <item-id>. See .eco shop' },{ quoted: message });
+      const catalog = { boost:5000, lucky:8000, vault:10000 };
+      if (!(item in catalog)) return await sock.sendMessage(chatId,{ text:'❌ Unknown item.' },{ quoted: message });
+      const price = catalog[item];
+      if ((user.wallet||0) < price) return await sock.sendMessage(chatId,{ text:'❌ Not enough wallet.' },{ quoted: message });
+      user.wallet -= price; user.inventory = user.inventory || []; user.inventory.push(item);
+      if (item==='boost' || item==='lucky') user.boostExpiresAt = new Date(Date.now()+24*60*60*1000);
+      await saveUser(user);
+      await sock.sendMessage(chatId,{ text:`✅ Purchased ${item}.` },{ quoted: message });
+      break;
+    }
+    case 'inv':
+    case 'inventory': {
+      const inv = user.inventory || [];
+      await sock.sendMessage(chatId,{ text:`🎒 Inventory\n${inv.length? inv.join(', ') : 'Empty'}` },{ quoted: message });
+      break;
+    }
+    case 'auction': {
+      // .eco auction <item> <start_price>
+      const item = (args[1]||'').toLowerCase();
+      const start = parseInt(args[2]);
+      if (!item || isNaN(start) || start<=0) return await sock.sendMessage(chatId,{ text:'Usage: .eco auction <item> <start_price>' },{ quoted: message });
+      if (!user.inventory || !user.inventory.includes(item)) return await sock.sendMessage(chatId,{ text:'❌ You do not own this item.' },{ quoted: message });
+      if (!global.auctions) global.auctions = new Map();
+      if (global.auctions.has(chatId)) return await sock.sendMessage(chatId,{ text:'An auction is already running here.' },{ quoted: message });
+      global.auctions.set(chatId,{ item, owner:userId, highestBid:start, highestBidder:null, ends: Date.now()+60000 });
+      await sock.sendMessage(chatId,{ text:`🏦 Auction started for ${item}. Starting at $${start}. Place bids with .eco bid <amount>. Ends in 60s.` },{ quoted: message });
+      setTimeout(async ()=>{
+        const a = global.auctions.get(chatId); if (!a) return;
+        if (!a.highestBidder) {
+          await sock.sendMessage(chatId,{ text:'Auction ended with no bids.' });
+        } else {
+          // transfer item and funds
+          const winner = await getUser(a.highestBidder);
+          if ((winner.wallet||0) >= a.highestBid) {
+            winner.wallet -= a.highestBid; user.wallet = (user.wallet||0) + a.highestBid;
+            // move item
+            winner.inventory = winner.inventory || []; winner.inventory.push(a.item);
+            user.inventory = (user.inventory||[]).filter(x=>x!==a.item);
+            await saveUser(winner); await saveUser(user);
+            await sock.sendMessage(chatId,{ text:`🏁 Auction won by @${a.highestBidder.split('@')[0]} for $${a.highestBid}`, mentions:[a.highestBidder] });
+          } else {
+            await sock.sendMessage(chatId,{ text:`❌ Winner had insufficient funds. Auction void.` });
+          }
+        }
+        global.auctions.delete(chatId);
+      }, 60000);
+      break;
+    }
+    case 'bid': {
+      const amt = parseInt(args[1]);
+      if (isNaN(amt) || amt<=0) return await sock.sendMessage(chatId,{ text:'Usage: .eco bid <amount>' },{ quoted: message });
+      if (!global.auctions || !global.auctions.get(chatId)) return await sock.sendMessage(chatId,{ text:'No active auction here.' },{ quoted: message });
+      const a = global.auctions.get(chatId);
+      if (a.ends < Date.now()) return await sock.sendMessage(chatId,{ text:'Auction already ended.' },{ quoted: message });
+      if (amt <= a.highestBid) return await sock.sendMessage(chatId,{ text:`Bid must be > $${a.highestBid}.` },{ quoted: message });
+      const bidder = await getUser(userId);
+      if ((bidder.wallet||0) < amt) return await sock.sendMessage(chatId,{ text:'❌ Insufficient wallet for this bid.' },{ quoted: message });
+      a.highestBid = amt; a.highestBidder = userId; global.auctions.set(chatId,a);
+      await sock.sendMessage(chatId,{ text:`✅ Highest bid updated: $${amt} by @${userId.split('@')[0]}`, mentions:[userId] },{ quoted: message });
+      break;
+    }
     case 'blackjack': {
       const bet = parseInt(args[1]);
       if (isNaN(bet) || bet<=0) return await sock.sendMessage(chatId,{ text:'Usage: .eco blackjack <bet>' },{ quoted: message });
