@@ -11,8 +11,8 @@ module.exports = async function numberGame(sock, chatId, message, args) {
 
   if (sub === 'start') {
     const u = await getUser(userId);
-    if ((u.wallet||0) < 5000) return sock.sendMessage(chatId,{text:'⚠️ Need $5,000 to start.'},{quoted:message});
-    u.wallet -= 5000; await saveUser(u);
+    if ((u.wallet||0) < 100) return sock.sendMessage(chatId,{text:'⚠️ Need $100 to start.'},{quoted:message});
+    u.wallet -= 100; await saveUser(u);
     const num = Math.floor(Math.random()*100)+1;
     games.set(userId,{ num, attempts:10 });
     return sock.sendMessage(chatId,{text:'🎮 Started! Guess a number 1-100. Attempts: 10'},{quoted:message});
