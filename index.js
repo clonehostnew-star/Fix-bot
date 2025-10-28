@@ -53,6 +53,8 @@ store.readFromFile()
 const settings = require('./settings')
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000)
 
+// Do not auto-set global.phoneNumber; prompt user for number unless provided via CLI
+
 // Memory optimization - Force garbage collection if available
 setInterval(() => {
     if (global.gc) {
@@ -70,12 +72,20 @@ setInterval(() => {
     }
 }, 30_000) // check every 30 seconds
 
-let phoneNumber = "2332727272171717"
-let owner = JSON.parse(fs.readFileSync('./data/owner.json'))
+let phoneNumber = ""
+let owner
+try {
+    if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true })
+    if (!fs.existsSync('./data/owner.json')) fs.writeFileSync('./data/owner.json', JSON.stringify({ owners: [] }, null, 2))
+    owner = JSON.parse(fs.readFileSync('./data/owner.json'))
+} catch {
+    owner = { owners: [] }
+}
 
 global.botname = settings.botName;
 global.themeemoji = "•"
-const pairingCode = !!phoneNumber || process.argv.includes("--pairing-code")
+// Enable pairing flow by default when running interactively, or when --pairing-code is passed
+const pairingCode = process.argv.includes("--pairing-code") || (!!process.stdin.isTTY)
 const useMobile = process.argv.includes("--mobile")
 
 // Only create readline interface if we're in an interactive environment
@@ -84,8 +94,8 @@ const question = (text) => {
     if (rl) {
         return new Promise((resolve) => rl.question(text, resolve))
     } else {
-        // In non-interactive environment, use ownerNumber from settings
-        return Promise.resolve(settings.ownerNumber || phoneNumber)
+        // In non-interactive environments, always use configured ownerNumber
+        return Promise.resolve((settings.ownerNumber || phoneNumber || '').toString())
     }
 }
 
@@ -203,11 +213,12 @@ async function startXeonBotInc() {
     if (pairingCode && !XeonBotInc.authState.creds.registered) {
         if (useMobile) throw new Error('Cannot use pairing code with mobile api')
 
+        // Always prompt in interactive mode; do not auto-fill from settings unless non-interactive
         let phoneNumber
-        if (!!global.phoneNumber) {
-            phoneNumber = global.phoneNumber
-        } else {
+        if (process.stdin.isTTY) {
             phoneNumber = await question(chalk.bgBlack(chalk.greenBright(`Please type your WhatsApp number 😍\nFormat: ${settings.ownerNumber} (without + or spaces) : `)))
+        } else {
+            phoneNumber = (process.env.PHONE_NUMBER || global.phoneNumber || '').toString()
         }
 
         // Clean the phone number - remove any non-digit characters

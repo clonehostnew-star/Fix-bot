@@ -1,6 +1,7 @@
 const axios = require('axios');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const { uploadImage } = require('../lib/uploadImage');
+const FormData = require('form-data');
 
 async function getQuotedOrOwnImageUrl(sock, message) {
     // 1) Quoted image (highest priority)
@@ -58,25 +59,74 @@ module.exports = {
 
         
             // Call the remove background API
-            const apiUrl = `https://api.siputzx.my.id/api/iloveimg/removebg?image=${encodeURIComponent(imageUrl)}`;
-            
-            const response = await axios.get(apiUrl, {
-                responseType: 'arraybuffer',
-                timeout: 30000, // 30 second timeout
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-            });
+			const apiUrl = `https://api.siputzx.my.id/api/iloveimg/removebg?image=${encodeURIComponent(imageUrl)}`;
+			let processedBuffer = null;
 
-            if (response.status === 200 && response.data) {
-                // Send the processed image
-                await sock.sendMessage(chatId, {
-                    image: response.data,
-                    caption: '✨ *Background removed successfully!*\n\n𝗣𝗥𝗢𝗖𝗘𝗦𝗦𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧'
-                }, { quoted: message });
-            } else {
-                throw new Error('Failed to process image');
-            }
+			try {
+				const response = await axios.get(apiUrl, {
+					responseType: 'arraybuffer',
+					timeout: 30000,
+					headers: {
+						'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+					}
+				});
+				const contentType = String(response.headers['content-type'] || '').toLowerCase();
+				if (contentType.startsWith('image/')) {
+					processedBuffer = Buffer.from(response.data);
+				} else {
+					// Try parse JSON and follow result/url or base64 data
+					try {
+						const textBody = Buffer.isBuffer(response.data) ? response.data.toString('utf-8') : String(response.data || '');
+						const json = JSON.parse(textBody);
+						const nextUrl = json.result || json.url || json.dataUrl || json.output || null;
+						const base64 = json.data || json.base64 || null;
+						if (base64) {
+							processedBuffer = Buffer.from(base64.replace(/^data:image\/[a-zA-Z]+;base64,/, ''), 'base64');
+						} else if (nextUrl) {
+							const follow = await axios.get(nextUrl, { responseType: 'arraybuffer', timeout: 30000 });
+							if (follow.status === 200) processedBuffer = Buffer.from(follow.data);
+						}
+					} catch {}
+				}
+			} catch (e) {
+				// first provider failed, fall through to alternative
+			}
+
+			// Fallback 1: official remove.bg if API key provided
+			if (!processedBuffer && process.env.REMOVE_BG_API_KEY) {
+				try {
+					const form = new FormData();
+					form.append('image_url', imageUrl);
+					form.append('size', 'auto');
+					const resp = await axios.post('https://api.remove.bg/v1.0/removebg', form, {
+						responseType: 'arraybuffer',
+						timeout: 45000,
+						headers: {
+							...form.getHeaders(),
+							'X-Api-Key': process.env.REMOVE_BG_API_KEY
+						}
+					});
+					if (resp.status === 200) processedBuffer = Buffer.from(resp.data);
+				} catch {}
+			}
+
+			// Fallback 2: alternate siputzx endpoint
+			if (!processedBuffer) {
+				try {
+					const alt = await axios.get(`https://api.siputzx.my.id/api/removebg?img=${encodeURIComponent(imageUrl)}`, {
+						responseType: 'arraybuffer',
+						timeout: 30000
+					});
+					if (alt.status === 200) processedBuffer = Buffer.from(alt.data);
+				} catch {}
+			}
+
+			if (!processedBuffer) throw new Error('Failed to process image');
+
+			await sock.sendMessage(chatId, {
+				image: processedBuffer,
+				caption: '✨ *Background removed successfully!*\n\n𝗣𝗥𝗢𝗖𝗘𝗦𝗦𝗘𝗗 𝗕𝗬 𝗞𝗡𝗜𝗚𝗛𝗧-𝗕𝗢𝗧'
+			}, { quoted: message });
 
         } catch (error) {
             console.error('RemoveBG Error:', error.message);

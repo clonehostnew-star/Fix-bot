@@ -46,13 +46,12 @@ const newsCommand = require('./commands/news');
 const kickCommand = require('./commands/kick');
 const simageCommand = require('./commands/simage');
 const attpCommand = require('./commands/attp');
-const { startHangman, guessLetter } = require('./commands/hangman');
+// Removed legacy hangman without entry fee
 const { startTrivia, answerTrivia } = require('./commands/trivia');
 const { complimentCommand } = require('./commands/compliment');
 const { insultCommand } = require('./commands/insult');
 const { eightBallCommand } = require('./commands/eightball');
 const { lyricsCommand } = require('./commands/lyrics');
-const { dareCommand } = require('./commands/dare');
 const { truthCommand } = require('./commands/truth');
 const { clearCommand } = require('./commands/clear');
 const pingCommand = require('./commands/ping');
@@ -109,21 +108,37 @@ const { piesCommand, piesAlias } = require('./commands/pies');
 const stickercropCommand = require('./commands/stickercrop');
 const updateCommand = require('./commands/update');
 const removebgCommand = require('./commands/removebg');
-const { reminiCommand } = require('./commands/remini');
+// keep single remini import
 const { igsCommand } = require('./commands/igs');
 const { anticallCommand, readState: readAnticallState } = require('./commands/anticall');
 const { pmblockerCommand, readState: readPmBlockerState } = require('./commands/pmblocker');
 const settingsCommand = require('./commands/settings');
-const soraCommand = require('./commands/sora');
+// keep single sora import
 const responsoryCommand = require('./commands/responsory');
 const economyCommand = require('./commands/economy');
-const bibleCommand = require('./commands/bible');
 const hangmanGame = require('./commands/hangman_game');
 const numberGame = require('./commands/number_game');
 const wordHunt = require('./commands/wordhunt');
 const wordCount = require('./commands/wordcount');
 const systemCommand = require('./commands/system');
 const { drainForCommand, getStatus } = require('./lib/systemState');
+const waMasterCommand = require('./commands/wamaster');
+const { handleIncomingProtection } = require('./lib/wamaster');
+const { handleBiblePassive, bibleCommand } = require('./commands/bible');
+const { startWordCount, handleWordCountMessage } = require('./commands/wordcount');
+const { startWordHunt, handleWordHuntMessage } = require('./commands/wordhunt');
+const rpsCommand = require('./commands/rps');
+const diceCommand = require('./commands/dice');
+const coinCommand = require('./commands/coin');
+const shortlinkCommand = require('./commands/shortlink');
+const calculateCommand = require('./commands/calculate');
+const { reminiCommand } = require('./commands/remini');
+const soraCommand = require('./commands/sora');
+const removebgCmd = require('./commands/removebg');
+const wikiCommand = require('./commands/wiki');
+const dictionaryCommand = require('./commands/dictionary');
+const stocksCommand = require('./commands/stocks');
+const cryptoCommand = require('./commands/crypto');
 
 // Global settings
 global.packname = settings.packname;
@@ -245,6 +260,11 @@ async function handleMessages(sock, messageUpdate, printLog) {
             await Antilink(message, sock);
         }
 
+        // Passive handlers (accept user input for ongoing games/quizzes)
+        try { await handleBiblePassive(sock, chatId, message); } catch {}
+        try { await handleWordCountMessage(sock, chatId, message); } catch {}
+        try { await handleWordHuntMessage(sock, chatId, message); } catch {}
+
         // PM blocker: block non-owner DMs when enabled (do not ban)
         if (!isGroup && !message.key.fromMe && !senderIsSudo) {
             try {
@@ -269,6 +289,10 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 await handleChatbotResponse(sock, chatId, message, userMessage, senderId);
                 await handleTagDetection(sock, chatId, message, senderId);
                 await handleMentionDetection(sock, chatId, message);
+                // Passive handlers for games and bible
+                try { await handleWordCountMessage(sock, chatId, message); } catch {}
+                try { await handleWordHuntMessage(sock, chatId, message); } catch {}
+                try { const { handleBiblePassive } = require('./commands/bible'); await handleBiblePassive(sock, chatId, message); } catch {}
             }
             return;
         }
@@ -369,6 +393,28 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 {
                     const args = userMessage.split(' ').slice(1);
                     await waMasterCommand(sock, chatId, message, args);
+                    commandExecuted = true;
+                }
+                break;
+            case userMessage.startsWith('.bible'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await bibleCommand(sock, chatId, message, args);
+                    commandExecuted = true;
+                }
+                break;
+            case userMessage.startsWith('.wordcount'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await startWordCount(sock, chatId, message, args);
+                    commandExecuted = true;
+                }
+                break;
+            case userMessage.startsWith('.wordhunt'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await startWordHunt(sock, chatId, message, args);
+                    commandExecuted = true;
                 }
                 break;
             case userMessage.startsWith('.system'):
@@ -559,6 +605,24 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 const tttText = userMessage.split(' ').slice(1).join(' ');
                 await tictactoeCommand(sock, chatId, senderId, tttText);
                 break;
+            case userMessage.startsWith('.rps'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await rpsCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.dice'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await diceCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.coin') || userMessage.startsWith('.cf'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await coinCommand(sock, chatId, message, args);
+                }
+                break;
             case userMessage.startsWith('.move'):
                 const position = parseInt(userMessage.split(' ')[1]);
                 if (isNaN(position)) {
@@ -616,9 +680,6 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 const stupidMentionedJid = message.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
                 const stupidArgs = userMessage.split(' ').slice(1);
                 await stupidCommand(sock, chatId, stupidQuotedMsg, stupidMentionedJid, senderId, stupidArgs);
-                break;
-            case userMessage === '.dare':
-                await dareCommand(sock, chatId, message);
                 break;
             case userMessage === '.truth':
                 await truthCommand(sock, chatId, message);
@@ -912,6 +973,57 @@ async function handleMessages(sock, messageUpdate, printLog) {
                 const commandLength = userMessage.startsWith('.translate') ? 10 : 4;
                 await handleTranslateCommand(sock, chatId, message, userMessage.slice(commandLength));
                 return;
+            case userMessage.startsWith('.shortlink'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await shortlinkCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.calculate') || userMessage.startsWith('.calc'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await calculateCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.remini'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await reminiCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.sora'):
+                await soraCommand(sock, chatId, message);
+                break;
+            case userMessage.startsWith('.removebg') || userMessage.startsWith('.rmbg') || userMessage.startsWith('.nobg'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await removebgCmd.exec(sock, message, args);
+                }
+                break;
+            case userMessage.startsWith('.wiki'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await wikiCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.dictionary') || userMessage.startsWith('.define'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await dictionaryCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.stocks'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await stocksCommand(sock, chatId, message, args);
+                }
+                break;
+            case userMessage.startsWith('.crypto'):
+                {
+                    const args = userMessage.split(' ').slice(1);
+                    await cryptoCommand(sock, chatId, message, args);
+                }
+                break;
             case userMessage.startsWith('.ss') || userMessage.startsWith('.ssweb') || userMessage.startsWith('.screenshot'):
                 const ssCommandLength = userMessage.startsWith('.screenshot') ? 11 : (userMessage.startsWith('.ssweb') ? 6 : 3);
                 await handleSsCommand(sock, chatId, message, userMessage.slice(ssCommandLength).trim());
